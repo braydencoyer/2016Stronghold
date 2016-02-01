@@ -6,6 +6,10 @@ class Robot: public IterativeRobot
 public:
 	LiveWindow *lw = LiveWindow::GetInstance();
 
+	//Constants
+	double ANGLE_TOLERANCE = 1;   //Degrees
+	double XY_TOLERANCE = 0.25;  //Meters
+
 	//Auto Modes
 	SendableChooser *autoMode;
 	SendableChooser *def[4];
@@ -23,7 +27,7 @@ public:
 	RobotDrive drive;
 
 	//Sensors
-	//AHRS *ahrs;
+	AHRS *ahrs;
 
 
 	//Human input
@@ -60,7 +64,7 @@ public:
 			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
 			/* Alternatively:  I2C::Port::kMXP, SerialPort::Port::kMXP or SerialPort::Port::kUSB */
 			/* See http://navx-mxp.kauailabs.com/guidance/selecting-an-interface/ for details.   */
-			//ahrs = new AHRS(SPI::Port::kMXP);
+			ahrs = new AHRS(SPI::Port::kMXP);
 		} catch (std::exception ex) {
 			std::string err_string = "Error instantiating navX MXP:  ";
 			err_string += ex.what();
@@ -189,6 +193,9 @@ public:
 			DriverStation::ReportError(defense[j]);
 		}
 		DriverStation::ReportError("Done!");
+
+		ahrs->ResetDisplacement();
+		ahrs->ZeroYaw();
 	}
 
 	void AutonomousPeriodic()
@@ -200,6 +207,7 @@ public:
 			{
 			case 0: {
 				//TODO Use move function to move forward ? meters
+				if(!NavigateTo(0,1)) return;
 				autoState++;
 				break;
 			}
@@ -213,7 +221,7 @@ public:
 			case 2:
 			{
 				//Drive to position on arc around tower
-
+				//if(!NavigateTo(0,1)) return; TODO Calculate Arc
 				break;
 			}
 			case 3:
@@ -324,7 +332,78 @@ public:
  * ---------------------------------------------------------------------
  */
 
+	//IMPORTANT: All accel values ARE displaced by current orientation; as such, so are dispacements!!!
+	bool NavigateTo(double xTarget, double yTarget)
+	{
+		//Get current location (swapped due to 3d to 2d conversion)
+		double currentY = ahrs->GetDisplacementX();
+		double currentX = ahrs->GetDisplacementY();
 
+		//Get offset
+		double xOff = xTarget-currentX;
+		double yOff = yTarget-currentY;
+
+		if(abs(xOff)<XY_TOLERANCE && abs(yOff)<XY_TOLERANCE)
+		{
+			//At or close enough to location, true=proceed to next action
+			return true;
+		}
+
+		//Not at location yet
+		//Turn towoards target, stop this execution if turning
+		//Adjust if xOff is exactly 0 to prevent y/0 crash
+		if(xOff==0) xOff = 0.0000000000001;
+		double angle = atan(abs(yOff)/abs(xOff));
+
+		//If still rotating, return false to halt execution
+		//Manually select quadrant bc atan sucks
+		if(xOff>0&&yOff>0)
+		{
+			if(!RotateToAngle(90-angle)) return false;
+		}
+		else if(xOff<0&&yOff>0)
+		{
+			if(!RotateToAngle(-(90-angle))) return false;
+		}
+		else if(xOff>0&&yOff<0)
+		{
+			if(!RotateToAngle(90+angle)) return false;
+		}
+		else if(xOff>0&&yOff>0)
+		{
+			if(!RotateToAngle(-(90+angle))) return false;
+		}
+
+		//If we are still here, we are facing in right direction. Onward!
+		drive.ArcadeDrive(1,0);
+
+		return false;
+	}
+
+
+	bool RotateToAngle(double targetAngle)
+	{
+		double currentAngle = ahrs->GetYaw();
+
+		//If at angle already, stop and return
+		if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
+		{
+			return true;  //true=proceed to next action
+		}
+
+		//Not at angle, go to it
+		if(currentAngle>targetAngle)
+		{
+			//Turn left
+			drive.ArcadeDrive(0.0,-1);
+		}
+		else
+		{
+			//Turn right
+			drive.ArcadeDrive(0.0,1);
+		}
+		return false;
+	}
 
 
 
