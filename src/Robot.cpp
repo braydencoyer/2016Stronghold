@@ -35,22 +35,35 @@ public:
 	Joystick specials;
 
 
-	//Special things
-	Compressor compressor;
+	//PCM LOCS
+	const static int PCMA = 0;
+	const static int PCMB = 1;
+
+
+	//Pneumatics
 	DoubleSolenoid shifter;
+
 	DoubleSolenoid goingUpA, goingUpB;
+
+	//Shooter
 	Victor shooter;
 	DoubleSolenoid shootyStick;
+	DoubleSolenoid shooterAngle;
+
+	Compressor compressor;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
 	 * -------------------------------------------------------------
 	 */
+
 	Robot():
-		left(0),right(1),drive(left,right),
-		mainStick(0), specials(1), compressor(0), shifter(0,1),
-		goingUpA(2,3),goingUpB(4,5),shooter(2),shootyStick(6,7)
+		left(1),right(2),drive(left,right),mainStick(0),specials(1),
+		shifter(PCMA,0,1),goingUpA(PCMA,2,3),goingUpB(PCMA,4,5),
+		shooter(2),shootyStick(PCMB,0,1),
+		shooterAngle(PCMA,6,7),compressor(PCMA)
 	{}
+
 
 	void RobotInit()
 	{
