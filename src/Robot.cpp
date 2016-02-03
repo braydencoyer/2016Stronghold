@@ -106,13 +106,13 @@ public:
 			def[j]->AddObject("Rock Wall", (void*)&"RockWall");
 			def[j]->AddObject("Rough Terrain", (void*)&"RoughTerrain");
 
-			SmartDashboard::PutData("Defense "+j, def[j]);
+			SmartDashboard::PutData("Defense"+j, def[j]);
 		}
 	}
-/* ------------------------------------------------------------------------
- * 									Teleop
- * ------------------------------------------------------------------------
- */
+	/* ------------------------------------------------------------------------
+	 * 									Teleop
+	 * ------------------------------------------------------------------------
+	 */
 
 	void TeleopInit()
 	{
@@ -159,6 +159,23 @@ public:
 			shootyStick.Set(shootyStick.kReverse);
 		}
 
+		//Shooter angle
+		if(specials.GetRawButton(2))
+		{
+			shooterAngle.Set(shooterAngle.kForward);
+			shooterAngle.Set(shooterAngle.kForward);
+		}
+		else if(specials.GetRawButton(3))
+		{
+			shooterAngle.Set(shooterAngle.kReverse);
+			shooterAngle.Set(shooterAngle.kReverse);
+		}
+		else
+		{
+			shooterAngle.Set(shooterAngle.kOff);
+			shooterAngle.Set(shooterAngle.kOff);
+		}
+
 	}
 
 
@@ -185,13 +202,13 @@ public:
 	{
 		autoState = 0;
 		drive.ArcadeDrive(0.0,0);
-		DriverStation::ReportError("Test");
 		drive.SetSafetyEnabled(false);
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
 		//autoMode = (SendableChooser*) SmartDashboard::GetData("Auto Modes");
+		DriverStation::ReportError("Getting Auto mode...\n");
 		autoSelected = *((std::string*)autoMode->GetSelected());
-		DriverStation::ReportError(autoSelected);
+		DriverStation::ReportError("Mode: "+autoSelected);
 
 		//toBreach = (SendableChooser*) SmartDashboard::GetData("Breach");
 		std::string pos = *((std::string*)toBreach->GetSelected());
@@ -340,10 +357,10 @@ public:
 		DriverStation::ReportError("Breaching Rough Terrain");
 	}
 
-/*----------------------------------------------------------------------
- * 							NavX-MXP Navigation    TODO
- * ---------------------------------------------------------------------
- */
+	/*----------------------------------------------------------------------
+	 * 							NavX-MXP Navigation    TODO
+	 * ---------------------------------------------------------------------
+	 */
 
 	//IMPORTANT: All accel values ARE displaced by current orientation; as such, so are dispacements!!!
 	bool NavigateTo(double xTarget, double yTarget)
@@ -422,10 +439,10 @@ public:
 
 
 
-/* ----------------------------------------------------------------------
- * 							Image Processing     TODO
- * ----------------------------------------------------------------------
- */
+	/* ----------------------------------------------------------------------
+	 * 							Image Processing     TODO
+	 * ----------------------------------------------------------------------
+	 */
 };
 
 START_ROBOT_CLASS(Robot)
