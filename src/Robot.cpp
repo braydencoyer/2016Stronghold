@@ -69,7 +69,8 @@ public:
 	{
 		autoMode = new SendableChooser();
 		autoMode->AddDefault("Auto Off", (void*)&"Auto Off");
-		autoMode->AddObject("Breach Defense", (void*)&"Breach");
+		autoMode->AddObject("Full Auto", (void*)&"Full");
+		autoMode->AddObject("Breach Only (TEST)",(void*)&"Breach");
 		SmartDashboard::PutData("Auto Modes", autoMode);
 
 
@@ -163,16 +164,13 @@ public:
 		if(specials.GetRawButton(2))
 		{
 			shooterAngle.Set(shooterAngle.kForward);
-			shooterAngle.Set(shooterAngle.kForward);
 		}
 		else if(specials.GetRawButton(3))
 		{
 			shooterAngle.Set(shooterAngle.kReverse);
-			shooterAngle.Set(shooterAngle.kReverse);
 		}
 		else
 		{
-			shooterAngle.Set(shooterAngle.kOff);
 			shooterAngle.Set(shooterAngle.kOff);
 		}
 
@@ -195,7 +193,7 @@ public:
 	}
 
 	/**----------------------------------------------------------------------
-	 * 							Autonomous		TODO
+	 * 							Autonomous
 	 * ----------------------------------------------------------------------
 	 */
 	void AutonomousInit()
@@ -226,13 +224,14 @@ public:
 
 		ahrs->ResetDisplacement();
 		ahrs->ZeroYaw();
+
 	}
 
 	void AutonomousPeriodic()
 	{
-		if(autoSelected=="Breach")
+		if(autoSelected=="Full")
 		{
-
+			//Do everything
 			switch(autoState)
 			{
 			case 0: {
@@ -272,6 +271,28 @@ public:
 
 				break;
 			}
+			case 6:
+			{
+				//done
+				drive.ArcadeDrive(0.0,0);
+				break;
+			}
+			}
+		}
+		else if(autoSelected=="Breach")
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				Breach(breachPos);
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
 			}
 		}
 	}
@@ -281,7 +302,7 @@ public:
 
 
 	/*------------------------------------------------------------------------
-	 *                        BREACHING        TODO
+	 *                        BREACHING        TODO Write breach protocols
 	 * -----------------------------------------------------------------------
 	 */
 
@@ -358,7 +379,7 @@ public:
 	}
 
 	/*----------------------------------------------------------------------
-	 * 							NavX-MXP Navigation    TODO
+	 * 							NavX-MXP Navigation    TODO Test this
 	 * ---------------------------------------------------------------------
 	 */
 
