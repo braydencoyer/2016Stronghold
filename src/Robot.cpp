@@ -6,6 +6,31 @@ class Robot: public IterativeRobot
 public:
 	LiveWindow *lw = LiveWindow::GetInstance();
 
+	//Out 6
+	//In 7
+	//Half speed 8
+
+	//Auto Modes
+	const std::string AUTO_MODE_OFF = "Off";
+	const std::string AUTO_MODE_FULL = "Full";
+	const std::string AUTO_MODE_BREACHTEST = "Breach";
+
+	const std::string BREACH_POS_0 = "0";
+	const std::string BREACH_POS_1 = "1";
+	const std::string BREACH_POS_2 = "2";
+	const std::string BREACH_POS_3 = "3";
+
+	const std::string AUTO_DEFTYPE_PORT = "Port";
+	const std::string AUTO_DEFTYPE_CHEV = "Checv";
+	const std::string AUTO_DEFTYPE_MOAT = "Moat";
+	const std::string AUTO_DEFTYPE_RAMPARTS = "Ramp";
+	const std::string AUTO_DEFTYPE_BRIDGE = "Bridge";
+	const std::string AUTO_DEFTYPE_SALLY = "Sally";
+	const std::string AUTO_DEFTYPE_RT = "Rough";
+	const std::string AUTO_DEFTYPE_RW = "RockWall";
+
+
+
 	//Constants
 	double ANGLE_TOLERANCE = 1;   //Degrees
 	double XY_TOLERANCE = 0.25;  //Meters
@@ -47,7 +72,7 @@ public:
 	//Pneumatics
 	DoubleSolenoid shifter;
 
-	DoubleSolenoid goingUpA, goingUpB;
+	DoubleSolenoid goingUpA;//, goingUpB;
 
 	//Shooter
 	CANTalon shooter;
@@ -57,6 +82,9 @@ public:
 
 	Compressor compressor;
 
+	//CANTalon angleMotor;
+	//CANTalon lift;
+
 	/*--------------------------------------------------------------
 	 *						Initialization
 	 * -------------------------------------------------------------
@@ -64,23 +92,24 @@ public:
 
 	Robot():
 		left(1),right(2),drive(left,right),mainStick(0),specials(1),pdp(5),
-		shifter(PCMA,0,1),goingUpA(PCMA,2,3),goingUpB(PCMA,4,5),
-		shooter(10),shooterB(11),shootyStick(PCMB,0,1),
-		shooterAngle(PCMA,6,7),compressor(PCMA)
+		shifter(PCMA,0,1),goingUpA(PCMA,2,3)//,goingUpB(PCMA,4,5),
+		,shooter(10),shooterB(11),compressor(PCMA),shootyStick(PCMB,0,1),
+		shooterAngle(PCMA,6,7)//,angleMotor(12),lift(13)
 	{
 
-		shooterB.SetControlMode(CANSpeedController::kFollower);
-		shooterB.Set(0);
-		shooterB.SetInverted(true);
+		//shooterB.SetControlMode(CANSpeedController::kFollower);
+		shooterB.SetInverted(false);
+		shooter.SetInverted(true);
+		//shooterB.Set(10);
 	}
 
 
 	void RobotInit()
 	{
 		autoMode = new SendableChooser();
-		autoMode->AddDefault("Auto Off", (void*)&"Auto Off");
-		autoMode->AddObject("Full Auto", (void*)&"Full");
-		autoMode->AddObject("Breach Only (TEST)",(void*)&"Breach");
+		autoMode->AddDefault("Auto Off", (void*)&AUTO_MODE_OFF);
+		autoMode->AddObject("Full Auto", (void*)&AUTO_MODE_FULL);
+		autoMode->AddObject("Breach Only (TEST)",(void*)&AUTO_MODE_BREACHTEST);
 		SmartDashboard::PutData("Auto Modes", autoMode);
 
 
@@ -96,10 +125,10 @@ public:
 		}
 
 		toBreach = new SendableChooser();
-		toBreach->AddDefault("2",(void*)&"0");
-		toBreach->AddObject("3",(void*)&"1");
-		toBreach->AddObject("4",(void*)&"2");
-		toBreach->AddObject("5",(void*)&"3");
+		toBreach->AddDefault("2",(void*)&BREACH_POS_0);
+		toBreach->AddObject("3",(void*)&BREACH_POS_1);
+		toBreach->AddObject("4",(void*)&BREACH_POS_2);
+		toBreach->AddObject("5",(void*)&BREACH_POS_3);
 
 		SmartDashboard::PutData("Breach", toBreach);
 
@@ -108,14 +137,14 @@ public:
 			def[j] = new SendableChooser();
 
 			//Add each option
-			def[j]->AddDefault("Portcullis", (void*)&"Portcullis");
-			def[j]->AddObject("Cheval", (void*)&"Cheval");
-			def[j]->AddObject("Moat", (void*)&"Moat");
-			def[j]->AddObject("Ramparts", (void*)&"Ramparts");
-			def[j]->AddObject("Drawbridge", (void*)&"Drawbridge");
-			def[j]->AddObject("Sally Door", (void*)&"SallyDoor");
-			def[j]->AddObject("Rock Wall", (void*)&"RockWall");
-			def[j]->AddObject("Rough Terrain", (void*)&"RoughTerrain");
+			def[j]->AddDefault("Portcullis", (void*)&AUTO_DEFTYPE_PORT);
+			def[j]->AddObject("Cheval", (void*)&AUTO_DEFTYPE_CHEV);
+			def[j]->AddObject("Moat", (void*)&AUTO_DEFTYPE_MOAT);
+			def[j]->AddObject("Ramparts", (void*)&AUTO_DEFTYPE_RAMPARTS);
+			def[j]->AddObject("Drawbridge", (void*)&AUTO_DEFTYPE_BRIDGE);
+			def[j]->AddObject("Sally Door", (void*)&AUTO_DEFTYPE_SALLY);
+			def[j]->AddObject("Rock Wall", (void*)&AUTO_DEFTYPE_RW);
+			def[j]->AddObject("Rough Terrain", (void*)&AUTO_DEFTYPE_RT);
 
 			SmartDashboard::PutData("Defense"+j, def[j]);
 		}
@@ -145,23 +174,34 @@ public:
 		if(specials.GetRawButton(11))
 		{
 			goingUpA.Set(goingUpA.kForward);
-			goingUpB.Set(goingUpB.kForward);
+			//goingUpB.Set(goingUpB.kForward);
 		}
 		else if(specials.GetRawButton(10))
 		{
 			goingUpA.Set(goingUpA.kReverse);
-			goingUpB.Set(goingUpB.kReverse);
+			//goingUpB.Set(goingUpB.kReverse);
 		}
 		else
 		{
 			goingUpA.Set(goingUpA.kOff);
-			goingUpB.Set(goingUpB.kOff);
+			//goingUpB.Set(goingUpB.kOff);
 		}
-
 
 		//Shooter
 		//shooter.SetSpeed(specials.GetY());
-		shooter.Set(specials.GetY());
+		//shooter.Set(specials.GetY());
+
+		double speed = 0;
+		if(specials.GetRawButton(6)) speed=1;
+		else if(specials.GetRawButton(7)) speed=-1;
+		double mult = -specials.GetRawAxis(2);
+		mult+=1;
+		mult*=0.5;
+
+		speed*=mult;
+		shooter.Set(speed);
+		shooterB.Set(speed);
+
 		if(specials.GetRawButton(1))
 		{
 			shootyStick.Set(shootyStick.kForward);
@@ -215,17 +255,17 @@ public:
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
 		//autoMode = (SendableChooser*) SmartDashboard::GetData("Auto Modes");
-		DriverStation::ReportError("Getting Auto mode...\n");
+		//DriverStation::ReportError("Getting Auto mode...\n");
 		//DriverStation::ReportError(autoMode->GetSelected());
 		autoSelected = *((std::string*)autoMode->GetSelected());
 		DriverStation::ReportError("Mode: "+autoSelected);
 
 		//toBreach = (SendableChooser*) SmartDashboard::GetData("Breach");
 		std::string pos = *((std::string*)toBreach->GetSelected());
-		if(pos=="0") breachPos=0;
-		if(pos=="1") breachPos=1;
-		if(pos=="2") breachPos=2;
-		if(pos=="3") breachPos=3;
+		if(pos==BREACH_POS_0) breachPos=0;
+		if(pos==BREACH_POS_1) breachPos=1;
+		if(pos==BREACH_POS_2) breachPos=2;
+		if(pos==BREACH_POS_3) breachPos=3;
 
 		for(int j=0;j<4;j++)
 		{
@@ -241,7 +281,7 @@ public:
 
 	void AutonomousPeriodic()
 	{
-		DriverStation::ReportError("Looping");
+		//DriverStation::ReportError("Looping");
 		if(autoSelected=="Full")
 		{
 			//Do everything
@@ -322,28 +362,28 @@ public:
 	//Switcher: call to activate breach type
 	void Breach(int toBreachPos)
 	{
-		if(defense[toBreachPos]=="Portcullis"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_PORT){
 			BreachPortcullis();
 		}
-		if(defense[toBreachPos]=="Cheval"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_CHEV){
 			BreachCheval();
 		}
-		if(defense[toBreachPos]=="Moat"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_MOAT){
 			BreachMoat();
 		}
-		if(defense[toBreachPos]=="Ramparts"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_RAMPARTS){
 			BreachRamparts();
 		}
-		if(defense[toBreachPos]=="Drawbridge"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_BRIDGE){
 			BreachDrawbridge();
 		}
-		if(defense[toBreachPos]=="SallyPort"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_SALLY){
 			BreachSally();
 		}
-		if(defense[toBreachPos]=="RockWall"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_RW){
 			BreachRockWall();
 		}
-		if(defense[toBreachPos]=="RoughTerrain"){
+		if(defense[toBreachPos]==AUTO_DEFTYPE_RT){
 			BreachRoughTerrain();
 		}
 	}
