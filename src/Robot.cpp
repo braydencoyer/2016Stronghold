@@ -35,10 +35,14 @@ public:
 	Joystick specials;
 
 
+	//PDP is on 5
+
 	//PCM LOCS
 	const static int PCMA = 0;
 	const static int PCMB = 1;
 
+
+	PowerDistributionPanel pdp;
 
 	//Pneumatics
 	DoubleSolenoid shifter;
@@ -46,7 +50,8 @@ public:
 	DoubleSolenoid goingUpA, goingUpB;
 
 	//Shooter
-	Victor shooter;
+	CANTalon shooter;
+	CANTalon shooterB;
 	DoubleSolenoid shootyStick;
 	DoubleSolenoid shooterAngle;
 
@@ -58,11 +63,16 @@ public:
 	 */
 
 	Robot():
-		left(1),right(2),drive(left,right),mainStick(0),specials(1),
+		left(1),right(2),drive(left,right),mainStick(0),specials(1),pdp(5),
 		shifter(PCMA,0,1),goingUpA(PCMA,2,3),goingUpB(PCMA,4,5),
-		shooter(2),shootyStick(PCMB,0,1),
+		shooter(10),shooterB(11),shootyStick(PCMB,0,1),
 		shooterAngle(PCMA,6,7),compressor(PCMA)
-	{}
+	{
+
+		shooterB.SetControlMode(CANSpeedController::kFollower);
+		shooterB.Set(0);
+		shooterB.SetInverted(true);
+	}
 
 
 	void RobotInit()
@@ -132,12 +142,12 @@ public:
 			shifter.Set(shifter.kReverse);
 
 		//Lift
-		if(specials.GetRawButton(7))
+		if(specials.GetRawButton(11))
 		{
 			goingUpA.Set(goingUpA.kForward);
 			goingUpB.Set(goingUpB.kForward);
 		}
-		else if(specials.GetRawButton(8))
+		else if(specials.GetRawButton(10))
 		{
 			goingUpA.Set(goingUpA.kReverse);
 			goingUpB.Set(goingUpB.kReverse);
@@ -150,7 +160,8 @@ public:
 
 
 		//Shooter
-		shooter.SetSpeed(specials.GetY());
+		//shooter.SetSpeed(specials.GetY());
+		shooter.Set(specials.GetY());
 		if(specials.GetRawButton(1))
 		{
 			shootyStick.Set(shootyStick.kForward);
@@ -161,11 +172,11 @@ public:
 		}
 
 		//Shooter angle
-		if(specials.GetRawButton(2))
+		if(specials.GetRawButton(3))
 		{
 			shooterAngle.Set(shooterAngle.kForward);
 		}
-		else if(specials.GetRawButton(3))
+		else if(specials.GetRawButton(2))
 		{
 			shooterAngle.Set(shooterAngle.kReverse);
 		}
@@ -189,7 +200,7 @@ public:
 	void DisabledPeriodic()
 	{
 		drive.ArcadeDrive(0.0,0);
-		shooter.SetSpeed(0);
+		shooter.Set(0);
 	}
 
 	/**----------------------------------------------------------------------
@@ -205,6 +216,7 @@ public:
 		right.SetSafetyEnabled(false);
 		//autoMode = (SendableChooser*) SmartDashboard::GetData("Auto Modes");
 		DriverStation::ReportError("Getting Auto mode...\n");
+		//DriverStation::ReportError(autoMode->GetSelected());
 		autoSelected = *((std::string*)autoMode->GetSelected());
 		DriverStation::ReportError("Mode: "+autoSelected);
 
@@ -218,7 +230,7 @@ public:
 		for(int j=0;j<4;j++)
 		{
 			defense[j] = *((std::string*)def[j]->GetSelected());
-			DriverStation::ReportError(defense[j]);
+			//DriverStation::ReportError(defense[j]);
 		}
 		DriverStation::ReportError("Done!");
 
@@ -229,6 +241,7 @@ public:
 
 	void AutonomousPeriodic()
 	{
+		DriverStation::ReportError("Looping");
 		if(autoSelected=="Full")
 		{
 			//Do everything
