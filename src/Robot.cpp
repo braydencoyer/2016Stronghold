@@ -66,24 +66,24 @@ public:
 	const static int PCMA = 0;
 	const static int PCMB = 1;
 
-
+	//PDP
 	PowerDistributionPanel pdp;
+
 
 	//Pneumatics
 	DoubleSolenoid shifter;
 
-	DoubleSolenoid goingUpA;//, goingUpB;
+	DoubleSolenoid goingUpA;
 
 	//Shooter
 	CANTalon shooter;
 	CANTalon shooterB;
 	DoubleSolenoid shootyStick;
-	DoubleSolenoid shooterAngle;
 
 	Compressor compressor;
 
-	//CANTalon angleMotor;
-	//CANTalon lift;
+	CANTalon angleMotor;
+	CANTalon lift;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
@@ -91,16 +91,18 @@ public:
 	 */
 
 	Robot():
-		left(1),right(2),drive(left,right),mainStick(0),specials(1),pdp(5),
-		shifter(PCMA,0,1),goingUpA(PCMA,2,3)//,goingUpB(PCMA,4,5),
-		,shooter(10),shooterB(11),compressor(PCMA),shootyStick(PCMB,0,1),
-		shooterAngle(PCMA,6,7)//,angleMotor(12),lift(13)
+		left(1),right(2),drive(left,right),mainStick(0),specials(1),pdp(0),
+		shifter(PCMA,0,1),goingUpA(PCMA,2,3)
+		,shooter(0),shooterB(1),shootyStick(PCMB,0,1),compressor(PCMA),
+		angleMotor(2),lift(3)
 	{
 
 		//shooterB.SetControlMode(CANSpeedController::kFollower);
 		shooterB.SetInverted(false);
 		shooter.SetInverted(true);
 		//shooterB.Set(10);
+
+		//angleMotor.SetPositionMode();
 	}
 
 
@@ -174,22 +176,11 @@ public:
 		if(specials.GetRawButton(11))
 		{
 			goingUpA.Set(goingUpA.kForward);
-			//goingUpB.Set(goingUpB.kForward);
 		}
 		else if(specials.GetRawButton(10))
 		{
 			goingUpA.Set(goingUpA.kReverse);
-			//goingUpB.Set(goingUpB.kReverse);
 		}
-		else
-		{
-			goingUpA.Set(goingUpA.kOff);
-			//goingUpB.Set(goingUpB.kOff);
-		}
-
-		//Shooter
-		//shooter.SetSpeed(specials.GetY());
-		//shooter.Set(specials.GetY());
 
 		double speed = 0;
 		if(specials.GetRawButton(6)) speed=1;
@@ -212,18 +203,7 @@ public:
 		}
 
 		//Shooter angle
-		if(specials.GetRawButton(3))
-		{
-			shooterAngle.Set(shooterAngle.kForward);
-		}
-		else if(specials.GetRawButton(2))
-		{
-			shooterAngle.Set(shooterAngle.kReverse);
-		}
-		else
-		{
-			shooterAngle.Set(shooterAngle.kOff);
-		}
+		angleMotor.Set(specials.GetY());
 
 	}
 
