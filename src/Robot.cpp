@@ -82,8 +82,8 @@ public:
 
 	Compressor compressor;
 
-	CANTalon angleMotor;
-	CANTalon lift;
+	//CANTalon angleMotor;
+	//CANTalon lift;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
@@ -93,8 +93,8 @@ public:
 	Robot():
 		left(1),right(2),drive(left,right),mainStick(0),specials(1),pdp(0),
 		shifter(PCMA,0,1),goingUpA(PCMA,2,3)
-		,shooter(0),shooterB(1),shootyStick(PCMB,0,1),compressor(PCMA),
-		angleMotor(2),lift(3)
+	,shooter(0),shooterB(1),shootyStick(PCMB,0,1),compressor(PCMA)//,
+	//angleMotor(2),lift(3)
 	{
 
 		//shooterB.SetControlMode(CANSpeedController::kFollower);
@@ -203,7 +203,7 @@ public:
 		}
 
 		//Shooter angle
-		angleMotor.Set(specials.GetY());
+		//angleMotor.Set(specials.GetY());
 
 	}
 
