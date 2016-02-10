@@ -33,7 +33,7 @@ public:
 
 	//Constants
 	double ANGLE_TOLERANCE = 1;   //Degrees
-	double XY_TOLERANCE = 0.25;  //Meters
+	double XY_TOLERANCE = 0.1;  //Meters
 
 	//Vision Constants
 	double TARGET_ORIGIN_X = 250;
@@ -269,7 +269,7 @@ public:
 			//shootyMotor.Set(0);
 		}
 
-		//Shooter angle
+		//Shooter angle TODO Activate shooter angle & add smart systems
 		/*
 		if(specials.GetRawButton(6)||specials.GetRawButton(11))
 		{
@@ -344,8 +344,8 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-				//TODO Use move function to move forward ? meters
-				if(!NavigateTo(0,1)) return;
+				//Move forward 1.12 meters
+				if(!NavigateTo(0,1.12)) return;
 				autoState++;
 				break;
 			}
@@ -366,17 +366,31 @@ public:
 			{
 				//Initial firing sequence
 
+				//Raise angle up
+
 				break;
 			}
 			case 4:
 			{
 				//Confirm & adjust using vision
 
+				if(!AutoAim()) break;
+				autoState++;
 				break;
 			}
 			case 5:
 			{
 				//Fire
+				shooter.Set(1);
+				shooterB.Set(1);
+				//Let motors spin up
+				Wait(1);
+
+				//Fire TODO American port
+				shootyStick.Set(shootyStick.kForward);
+				//shootyMotor.Set(1);
+				Wait(1);
+				autoState++;
 
 				break;
 			}
@@ -384,6 +398,10 @@ public:
 			{
 				//done
 				drive.ArcadeDrive(0.0,0);
+				shooter.Set(0);
+				shooterB.Set(0);
+				shootyStick.Set(shootyStick.kReverse);
+				//shootyMotor.Set(0);
 				break;
 			}
 			}
@@ -570,7 +588,7 @@ public:
 
 
 	/* ----------------------------------------------------------------------
-	 * 							Image Processing     TODO
+	 * 							Image Processing     TODO Test Vision
 	 * ----------------------------------------------------------------------
 	 */
 
@@ -589,6 +607,7 @@ public:
 			if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL)
 			{
 				//Need vert adjustment
+				drive.ArcadeDrive(0.0,0.0);
 				/*
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
