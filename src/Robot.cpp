@@ -35,6 +35,12 @@ public:
 	double ANGLE_TOLERANCE = 1;   //Degrees
 	double XY_TOLERANCE = 0.25;  //Meters
 
+	//Vision Constants
+	double TARGET_ORIGIN_X = 250;
+	double TARGET_ORIGIN_Y = 250;
+	double ORIGIN_X_TOL = 10;
+	double ORIGIN_Y_TOL = 10;
+
 	//Auto Modes
 	SendableChooser *autoMode;
 	SendableChooser *def[4];
@@ -60,7 +66,43 @@ public:
 	Joystick specials;
 
 
-	//PDP is on 5
+	//VISION_____________________
+	//A structure to hold measurements of a particle
+	struct ParticleReport {
+		double PercentAreaToImageArea;
+		double Area;
+		double BoundingRectLeft;
+		double BoundingRectTop;
+		double BoundingRectRight;
+		double BoundingRectBottom;
+	};
+
+	//Structure to represent the scores for the various tests used for target identification
+	struct Scores {
+		double Area;
+		double Aspect;
+	};
+
+	//Images
+	Image *frame;
+	Image *binaryFrame;
+
+	//Constants
+	Range RING_HUE_RANGE = {101, 64};	//Default hue range for ring light
+	Range RING_SAT_RANGE = {88, 255};	//Default saturation range for ring light
+	Range RING_VAL_RANGE = {230, 255};	//Default value range for ring light
+	double AREA_MINIMUM = 0.5; //Default Area minimum for particle as a percentage of total image area
+	double SCORE_MIN = 75.0;  //Minimum score to be considered a tote
+	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
+	ParticleFilterCriteria2 criteria[1];
+	ParticleFilterOptions2 filterOptions = {0,0,1,1};
+	Scores scores;
+
+	IMAQdxSession session;
+	int imaqError;
+
+	double screenPosX;
+	double screenPosY;
 
 	//PCM LOCS
 	const static int PCMA = 0;
@@ -85,6 +127,8 @@ public:
 	//CANTalon angleMotor;
 	//CANTalon lift;
 
+	//CANTalon shootyMotor;
+
 	/*--------------------------------------------------------------
 	 *						Initialization
 	 * -------------------------------------------------------------
@@ -95,6 +139,7 @@ public:
 		shifter(PCMA,0,1),goingUpA(PCMA,2,3)
 	,shooter(0),shooterB(1),shootyStick(PCMB,0,1),compressor(PCMA)//,
 	//angleMotor(2),lift(3)
+	//,shootyMotor(x)
 	{
 
 		//shooterB.SetControlMode(CANSpeedController::kFollower);
@@ -150,6 +195,22 @@ public:
 
 			SmartDashboard::PutData("Defense"+j, def[j]);
 		}
+
+		//IMAGE__________________
+		//Create image stuff
+		binaryFrame = imaqCreateImage(IMAQ_IMAGE_U8,0);
+		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
+		//the camera name (ex "cam0") can be found through the roborio web interface
+		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &session);
+		if(imaqError != IMAQdxErrorSuccess) {
+			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
+		}
+		imaqError = IMAQdxConfigureGrab(session);
+		if(imaqError != IMAQdxErrorSuccess) {
+			DriverStation::ReportError("IMAQdxConfigureGrab error: " + std::to_string((long)imaqError) + "\n");
+		}
+
+		IMAQdxStartAcquisition(session);
 	}
 	/* ------------------------------------------------------------------------
 	 * 									Teleop
@@ -163,6 +224,8 @@ public:
 
 	void TeleopPeriodic()
 	{
+		IMAQdxGrab(session, frame, true, NULL);
+		CameraServer::GetInstance()->SetImage(frame);
 		//Wheel drive
 		drive.ArcadeDrive(mainStick);
 
@@ -173,18 +236,18 @@ public:
 			shifter.Set(shifter.kReverse);
 
 		//Lift
-		if(specials.GetRawButton(11))
+		if(mainStick.GetRawButton(2))
 		{
 			goingUpA.Set(goingUpA.kForward);
 		}
-		else if(specials.GetRawButton(10))
+		else
 		{
 			goingUpA.Set(goingUpA.kReverse);
 		}
 
 		double speed = 0;
-		if(specials.GetRawButton(6)) speed=1;
-		else if(specials.GetRawButton(7)) speed=-1;
+		if(specials.GetRawButton(3)) speed=1;
+		else if(specials.GetRawButton(2)) speed=-1;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
@@ -193,17 +256,30 @@ public:
 		shooter.Set(speed);
 		shooterB.Set(speed);
 
+
+		//TODO: add American port
 		if(specials.GetRawButton(1))
 		{
 			shootyStick.Set(shootyStick.kForward);
+			//shootyMotor.Set(1);
 		}
 		else
 		{
 			shootyStick.Set(shootyStick.kReverse);
+			//shootyMotor.Set(0);
 		}
 
 		//Shooter angle
-		//angleMotor.Set(specials.GetY());
+		/*
+		if(specials.GetRawButton(6)||specials.GetRawButton(11))
+		{
+			angleMotor.Set(1);
+		}
+		else if(specials.GetRawButton(7) || specials.GetRawButton(10))
+		{
+			angleMotor.Set(-1);
+		}
+		 */
 
 	}
 
@@ -497,6 +573,125 @@ public:
 	 * 							Image Processing     TODO
 	 * ----------------------------------------------------------------------
 	 */
+
+
+	bool AutoAim()
+	{
+		VisionStuff();
+		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
+		{
+			return true;  //true=proceed to next action
+		}
+		else
+		{
+			//We need to adjust
+			//Check L/R
+			if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL)
+			{
+				//Need vert adjustment
+				/*
+				if(screenPosY<TARGET_ORIGIN_Y)
+				{
+					//Decrease angle
+					angleMotor.Set(-0.3);
+				}
+				else
+				{
+					//Increase angle
+					angleMotor.Set(0.3);
+				}
+				 */
+			}
+			else
+			{
+				//Need horiz adjustment
+				if(screenPosX>TARGET_ORIGIN_X)
+				{
+					//Turn right
+					drive.ArcadeDrive(0.0,0.3);
+				}
+				else
+				{
+					drive.ArcadeDrive(0.0,-0.3);
+				}
+			}
+		}
+		return false;
+	}
+
+
+	void VisionStuff()
+	{
+		IMAQdxGrab(session, frame, true, NULL);
+		//Threshold the image looking for ring light color
+		imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
+
+		//Count particles in the image
+		int numParticles = 0;
+		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
+		SmartDashboard::PutNumber("Masked particles", numParticles);
+
+		//Send masked image to dashboard to assist in tweaking mask.
+		SendToDashboard(binaryFrame, imaqError);
+
+		//filter out small particles
+		float areaMin = SmartDashboard::GetNumber("Area min %", AREA_MINIMUM);
+		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, areaMin, 100, false, false};
+		imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
+
+		//Send particle count after filtering to dashboard
+		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
+		SmartDashboard::PutNumber("Filtered particles", numParticles);
+
+		if(numParticles > 0) {
+			//Measure particles and sort by particle size
+			std::vector<ParticleReport> particles;
+			for(int particleIndex = 0; particleIndex < numParticles; particleIndex++)
+			{
+				ParticleReport par;
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(par.PercentAreaToImageArea));
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &(par.Area));
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(par.BoundingRectTop));
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(par.BoundingRectLeft));
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(par.BoundingRectBottom));
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(par.BoundingRectRight));
+				particles.push_back(par);
+			}
+			sort(particles.begin(), particles.end(), CompareParticleSizes);
+
+			ParticleReport best = particles.at(0);
+			//Origin is average of edges
+			screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
+			screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
+
+			SmartDashboard::PutNumber("Target X", screenPosX);
+			SmartDashboard::PutNumber("Target Y", screenPosY);
+
+
+		} else {
+
+		}
+	}
+
+	void SendToDashboard(Image *image, int error)
+	{
+		//DriverStation::ReportError("Sending to dashboard");
+		if(error < ERR_SUCCESS) {
+			DriverStation::ReportError("Send To Dashboard error: " + std::to_string((long)imaqError) + "\n");
+		} else {
+			DriverStation::ReportError("[ERROR]Sending...");
+			CameraServer::GetInstance()->SetImage(binaryFrame);
+			DriverStation::ReportError("[ERROR]Sent!");
+		}
+	}
+
+	//Comparator function for sorting particles. Returns true if particle 1 is larger
+		static bool CompareParticleSizes(ParticleReport particle1, ParticleReport particle2)
+		{
+			//we want descending sort order
+			return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
+		}
+
 };
 
 START_ROBOT_CLASS(Robot)
