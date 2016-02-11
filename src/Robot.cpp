@@ -4,13 +4,17 @@
 class Robot: public IterativeRobot
 {
 public:
+
+	/* ----------------------------------------------------------------------
+	 * 							DECLARATIONS
+	 * ----------------------------------------------------------------------
+	 */
+
 	LiveWindow *lw = LiveWindow::GetInstance();
 
-	//Out 6
-	//In 7
 	//Half speed 8
 
-	//Auto Modes
+	//----------------------------AUTO MODE CONSTANTS-------------------
 	const std::string AUTO_MODE_OFF = "Off";
 	const std::string AUTO_MODE_FULL = "Full";
 	const std::string AUTO_MODE_BREACHTEST = "Breach";
@@ -31,15 +35,22 @@ public:
 
 
 
-	//Constants
+	//---------------------------NAVX CONSTANTS--------------------
 	double ANGLE_TOLERANCE = 1;   //Degrees
 	double XY_TOLERANCE = 0.1;  //Meters
 
-	//Vision Constants
+	//--------------------------VISION CONSTANTS-------------------
 	double TARGET_ORIGIN_X = 250;
 	double TARGET_ORIGIN_Y = 250;
 	double ORIGIN_X_TOL = 10;
 	double ORIGIN_Y_TOL = 10;
+
+	Range RING_HUE_RANGE = {101, 64};	//Default hue range for ring light
+	Range RING_SAT_RANGE = {88, 255};	//Default saturation range for ring light
+	Range RING_VAL_RANGE = {230, 255};	//Default value range for ring light
+	double AREA_MINIMUM = 0.5; //Default Area minimum for particle as a percentage of total image area
+	double SCORE_MIN = 75.0;  //Minimum score to be considered a tote
+	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	//Auto Modes
 	SendableChooser *autoMode;
@@ -53,21 +64,35 @@ public:
 	int autoState;
 
 
-	//Drive
+	//-----------------------MOTORS-------------------------
 	Victor left, right;
 	RobotDrive drive;
+	//CANTalon angleMotor;
+	//CANTalon lift;
 
-	//Sensors
+	//CANTalon shootyMotor;
+
+	CANTalon shooter;
+	CANTalon shooterB;
+
+	//----------------------SENSORS---------------------
+
+	//NavX Communication
 	AHRS *ahrs;
 
 
-	//Human input
+	//---------------------HUMAN INPUT-------------------
+
+	//Driver
 	Joystick mainStick;
+
+	//Specials
 	Joystick specials;
 
 
-	//VISION_____________________
-	//A structure to hold measurements of a particle
+	//-----------------------VISION------------------------
+
+	//Particle measurements as output by IMAQ
 	struct ParticleReport {
 		double PercentAreaToImageArea;
 		double Area;
@@ -77,57 +102,42 @@ public:
 		double BoundingRectBottom;
 	};
 
-	//Structure to represent the scores for the various tests used for target identification
-	struct Scores {
-		double Area;
-		double Aspect;
-	};
-
 	//Images
 	Image *frame;
 	Image *binaryFrame;
 
-	//Constants
-	Range RING_HUE_RANGE = {101, 64};	//Default hue range for ring light
-	Range RING_SAT_RANGE = {88, 255};	//Default saturation range for ring light
-	Range RING_VAL_RANGE = {230, 255};	//Default value range for ring light
-	double AREA_MINIMUM = 0.5; //Default Area minimum for particle as a percentage of total image area
-	double SCORE_MIN = 75.0;  //Minimum score to be considered a tote
-	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
+	//Filter function arguments
 	ParticleFilterCriteria2 criteria[1];
 	ParticleFilterOptions2 filterOptions = {0,0,1,1};
-	Scores scores;
 
+	//IMAQ storage
 	IMAQdxSession session;
 	int imaqError;
 
+	//Position of target on-screen, to be used later.
 	double screenPosX;
 	double screenPosY;
 
-	//PCM LOCS
+	//----------------------PCM LOCATIONS--------------------------
 	const static int PCMA = 0;
 	const static int PCMB = 1;
 
-	//PDP
+	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
 
 
-	//Pneumatics
+	//-------------------------PNEUMATICS---------------------------
 	DoubleSolenoid shifter;
 
+	//Hanging
 	DoubleSolenoid goingUpA;
 
-	//Shooter
-	CANTalon shooter;
-	CANTalon shooterB;
+	//Shooter (Germany only)
 	DoubleSolenoid shootyStick;
 
 	Compressor compressor;
 
-	//CANTalon angleMotor;
-	//CANTalon lift;
 
-	//CANTalon shootyMotor;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
@@ -142,6 +152,7 @@ public:
 	//,shootyMotor(x)
 	{
 
+		//--------Motor inversion----------------
 		//shooterB.SetControlMode(CANSpeedController::kFollower);
 		shooterB.SetInverted(false);
 		shooter.SetInverted(true);
@@ -153,13 +164,7 @@ public:
 
 	void RobotInit()
 	{
-		autoMode = new SendableChooser();
-		autoMode->AddDefault("Auto Off", (void*)&AUTO_MODE_OFF);
-		autoMode->AddObject("Full Auto", (void*)&AUTO_MODE_FULL);
-		autoMode->AddObject("Breach Only (TEST)",(void*)&AUTO_MODE_BREACHTEST);
-		SmartDashboard::PutData("Auto Modes", autoMode);
-
-
+		//--------------NAVX-MXP-------------------
 		try {
 			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
 			/* Alternatively:  I2C::Port::kMXP, SerialPort::Port::kMXP or SerialPort::Port::kUSB */
@@ -170,6 +175,14 @@ public:
 			err_string += ex.what();
 			DriverStation::ReportError(err_string.c_str());
 		}
+
+
+		//------------AUTO SELECTORS----------------
+		autoMode = new SendableChooser();
+		autoMode->AddDefault("Auto Off", (void*)&AUTO_MODE_OFF);
+		autoMode->AddObject("Full Auto", (void*)&AUTO_MODE_FULL);
+		autoMode->AddObject("Breach Only (TEST)",(void*)&AUTO_MODE_BREACHTEST);
+		SmartDashboard::PutData("Auto Modes", autoMode);
 
 		toBreach = new SendableChooser();
 		toBreach->AddDefault("2",(void*)&BREACH_POS_0);
@@ -196,7 +209,7 @@ public:
 			SmartDashboard::PutData("Defense"+j, def[j]);
 		}
 
-		//IMAGE__________________
+		//------------------VISION---------------------
 		//Create image stuff
 		binaryFrame = imaqCreateImage(IMAQ_IMAGE_U8,0);
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
@@ -224,18 +237,20 @@ public:
 
 	void TeleopPeriodic()
 	{
+		//------------------CAMERA FEED---------------------
 		IMAQdxGrab(session, frame, true, NULL);
 		CameraServer::GetInstance()->SetImage(frame);
-		//Wheel drive
+
+		//-----------------DRIVE SYSTEM---------------------
 		drive.ArcadeDrive(mainStick);
 
-		//Shifter
+		//-----------------SHIFTER--------------------------
 		if(mainStick.GetRawButton(1))
 			shifter.Set(shifter.kForward);
 		else
 			shifter.Set(shifter.kReverse);
 
-		//Lift
+		//-----------------HANGING-------------------------
 		if(mainStick.GetRawButton(2))
 		{
 			goingUpA.Set(goingUpA.kForward);
@@ -245,19 +260,24 @@ public:
 			goingUpA.Set(goingUpA.kReverse);
 		}
 
+		//-------------------SHOOTER------------------
+
+		//Speed based on throttle lever, convert from -1<t<1 to 0<t<1
 		double speed = 0;
 		if(specials.GetRawButton(3)) speed=1;
 		else if(specials.GetRawButton(2)) speed=-1;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
-
 		speed*=mult;
+
+		//Set wheels to speed
 		shooter.Set(speed);
 		shooterB.Set(speed);
 
-
-		//TODO: add American port
+		//Change status of solenoid to push ball into wheels (Germany)
+		//TODO: AMERICAN PORT
+		//Make wheel spin to push ball into shooter wheels (America)
 		if(specials.GetRawButton(1))
 		{
 			shootyStick.Set(shootyStick.kForward);
@@ -269,7 +289,8 @@ public:
 			//shootyMotor.Set(0);
 		}
 
-		//Shooter angle TODO Activate shooter angle & add smart systems
+		//Shooter angle  (Disabled until added later)
+		//TODO Activate shooter angle & add smart systems
 		/*
 		if(specials.GetRawButton(6)||specials.GetRawButton(11))
 		{
@@ -295,8 +316,10 @@ public:
 
 	void DisabledPeriodic()
 	{
+		//Make sure nothing is moving when we start up again
 		drive.ArcadeDrive(0.0,0);
 		shooter.Set(0);
+		shooterB.Set(0);
 	}
 
 	/**----------------------------------------------------------------------
@@ -305,31 +328,32 @@ public:
 	 */
 	void AutonomousInit()
 	{
+		//Auto state determines where we are in sequence, start at 0
 		autoState = 0;
+
+		//Disable motor safety so watchdogs don't lose their minds
 		drive.ArcadeDrive(0.0,0);
 		drive.SetSafetyEnabled(false);
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
-		//autoMode = (SendableChooser*) SmartDashboard::GetData("Auto Modes");
-		//DriverStation::ReportError("Getting Auto mode...\n");
-		//DriverStation::ReportError(autoMode->GetSelected());
-		autoSelected = *((std::string*)autoMode->GetSelected());
-		DriverStation::ReportError("Mode: "+autoSelected);
 
-		//toBreach = (SendableChooser*) SmartDashboard::GetData("Breach");
+		//Get main auto mode
+		autoSelected = *((std::string*)autoMode->GetSelected());
+
+		//Get position we are lined up with
 		std::string pos = *((std::string*)toBreach->GetSelected());
 		if(pos==BREACH_POS_0) breachPos=0;
 		if(pos==BREACH_POS_1) breachPos=1;
 		if(pos==BREACH_POS_2) breachPos=2;
 		if(pos==BREACH_POS_3) breachPos=3;
 
+		//Get what defense is in each position
 		for(int j=0;j<4;j++)
 		{
 			defense[j] = *((std::string*)def[j]->GetSelected());
-			//DriverStation::ReportError(defense[j]);
 		}
-		DriverStation::ReportError("Done!");
 
+		//Reset NavX in case it drifted while stationary
 		ahrs->ResetDisplacement();
 		ahrs->ZeroYaw();
 
@@ -337,10 +361,11 @@ public:
 
 	void AutonomousPeriodic()
 	{
-		//DriverStation::ReportError("Looping");
 		if(autoSelected=="Full")
 		{
-			//Do everything
+			//Do everything (Drive up, breach, move, shoot
+
+			//Switch case based on current autoState
 			switch(autoState)
 			{
 			case 0: {
@@ -434,6 +459,7 @@ public:
 	 */
 
 	//Switcher: call to activate breach type
+	//Calls the appropriate function for breaching a given position
 	void Breach(int toBreachPos)
 	{
 		if(defense[toBreachPos]==AUTO_DEFTYPE_PORT){
@@ -513,14 +539,17 @@ public:
 	//IMPORTANT: All accel values ARE displaced by current orientation; as such, so are dispacements!!!
 	bool NavigateTo(double xTarget, double yTarget)
 	{
+		//This function will get called periodically, returning true when the correct position is reached
+
 		//Get current location (swapped due to 3d to 2d conversion)
 		double currentY = ahrs->GetDisplacementX();
 		double currentX = ahrs->GetDisplacementY();
 
-		//Get offset
+		//Get offset between target and location (place origin on robot)
 		double xOff = xTarget-currentX;
 		double yOff = yTarget-currentY;
 
+		//Check if within tolerance
 		if(abs(xOff)<XY_TOLERANCE && abs(yOff)<XY_TOLERANCE)
 		{
 			//At or close enough to location, true=proceed to next action
@@ -528,13 +557,14 @@ public:
 		}
 
 		//Not at location yet
-		//Turn towoards target, stop this execution if turning
-		//Adjust if xOff is exactly 0 to prevent y/0 crash
+		//Turn to face target, stop this execution if turning
+		//Adjust if xOff is exactly 0 to prevent y/0 crash just in case
 		if(xOff==0) xOff = 0.0000000000001;
 		double angle = atan(abs(yOff)/abs(xOff));
 
 		//If still rotating, return false to halt execution
-		//Manually select quadrant bc atan sucks
+		//Manually select quadrant because arctan can be unpredictable
+		//This also handles the annoying Cartesian to Polar conversion
 		if(xOff>0&&yOff>0)
 		{
 			if(!RotateToAngle(90-angle)) return false;
@@ -552,7 +582,8 @@ public:
 			if(!RotateToAngle(-(90+angle))) return false;
 		}
 
-		//If we are still here, we are facing in right direction. Onward!
+		//If code is still executing, we are facing the correct direction but not there yet.
+		//Drive forward
 		drive.ArcadeDrive(1,0);
 
 		return false;
@@ -561,6 +592,9 @@ public:
 
 	bool RotateToAngle(double targetAngle)
 	{
+		//Called periodically, returns true if facing already
+
+		//Get angle from NavX
 		double currentAngle = ahrs->GetYaw();
 
 		//If at angle already, stop and return
@@ -595,7 +629,10 @@ public:
 
 	bool AutoAim()
 	{
+		//Process image, storing origin in screenPosX and screenPosY
 		VisionStuff();
+
+		//Check if target is in correct spot (within tolerance) already
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
 			return true;  //true=proceed to next action
@@ -606,9 +643,10 @@ public:
 			//Check L/R
 			if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL)
 			{
-				//Need vert adjustment
+				//L/R is within tolerance
+				//Need up/down adjustment
 				drive.ArcadeDrive(0.0,0.0);
-				/*
+				/*TODO Activate this when motors are added
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Decrease angle
@@ -623,7 +661,7 @@ public:
 			}
 			else
 			{
-				//Need horiz adjustment
+				//Need L/R adjustment before proceeding
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
@@ -631,6 +669,7 @@ public:
 				}
 				else
 				{
+					//Turn left
 					drive.ArcadeDrive(0.0,-0.3);
 				}
 			}
@@ -650,23 +689,26 @@ public:
 		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
 		SmartDashboard::PutNumber("Masked particles", numParticles);
 
-		//Send masked image to dashboard to assist in tweaking mask.
+		//Send masked image to dashboard
 		SendToDashboard(binaryFrame, imaqError);
 
 		//filter out small particles
-		float areaMin = SmartDashboard::GetNumber("Area min %", AREA_MINIMUM);
-		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, areaMin, 100, false, false};
+		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
 		imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
 
-		//Send particle count after filtering to dashboard
+		//Send particle count after filtering for size to dashboard
 		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
 		SmartDashboard::PutNumber("Filtered particles", numParticles);
 
+		//Make sure we even have particles to look at (crash prevention)
 		if(numParticles > 0) {
 			//Measure particles and sort by particle size
+			//Vector is like a dynamic array, it can change size
+			//Made of many Struct ParticleReports
 			std::vector<ParticleReport> particles;
 			for(int particleIndex = 0; particleIndex < numParticles; particleIndex++)
 			{
+				//Get data from IMAQ and store in par
 				ParticleReport par;
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(par.PercentAreaToImageArea));
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &(par.Area));
@@ -674,12 +716,18 @@ public:
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(par.BoundingRectLeft));
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(par.BoundingRectBottom));
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(par.BoundingRectRight));
+
+				//Add par to the vector
 				particles.push_back(par);
 			}
+
+			//Sort particles by area using comparator function CompareParticleSizes
 			sort(particles.begin(), particles.end(), CompareParticleSizes);
 
+			//The target will always be the biggest thing on the screen, use that to save time
 			ParticleReport best = particles.at(0);
-			//Origin is average of edges
+
+			//Origin of particle is average of edges, update variables accordingly
 			screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
 			screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
 
@@ -688,28 +736,27 @@ public:
 
 
 		} else {
-
+			//Somehow, there were no particles on the screen. This exists to stop a crash.
 		}
 	}
 
+	//Send the filtered image to the dashboard if there isn't an error
 	void SendToDashboard(Image *image, int error)
 	{
 		//DriverStation::ReportError("Sending to dashboard");
 		if(error < ERR_SUCCESS) {
-			DriverStation::ReportError("Send To Dashboard error: " + std::to_string((long)imaqError) + "\n");
+			DriverStation::ReportError("[ERROR]Send To Dashboard error: " + std::to_string((long)imaqError) + "\n");
 		} else {
-			DriverStation::ReportError("[ERROR]Sending...");
 			CameraServer::GetInstance()->SetImage(binaryFrame);
-			DriverStation::ReportError("[ERROR]Sent!");
 		}
 	}
 
 	//Comparator function for sorting particles. Returns true if particle 1 is larger
-		static bool CompareParticleSizes(ParticleReport particle1, ParticleReport particle2)
-		{
-			//we want descending sort order
-			return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
-		}
+	static bool CompareParticleSizes(ParticleReport particle1, ParticleReport particle2)
+	{
+		//we want descending sort order
+		return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
+	}
 
 };
 
