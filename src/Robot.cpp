@@ -1,5 +1,6 @@
 #include "WPILib.h"
 #include "AHRS.h"
+#include "Channels.h"
 
 class Robot: public IterativeRobot
 {
@@ -36,19 +37,19 @@ public:
 
 
 	//---------------------------NAVX CONSTANTS--------------------
-	double ANGLE_TOLERANCE = 1;   //Degrees
+	double ANGLE_TOLERANCE = 10;   //Degrees
 	double XY_TOLERANCE = 0.1;  //Meters
 
 	//--------------------------VISION CONSTANTS-------------------
 	double TARGET_ORIGIN_X = 250;
 	double TARGET_ORIGIN_Y = 250;
-	double ORIGIN_X_TOL = 10;
-	double ORIGIN_Y_TOL = 10;
+	double ORIGIN_X_TOL = 40;
+	double ORIGIN_Y_TOL = 40;
 
-	Range RING_HUE_RANGE = {101, 64};	//Default hue range for ring light
-	Range RING_SAT_RANGE = {88, 255};	//Default saturation range for ring light
-	Range RING_VAL_RANGE = {230, 255};	//Default value range for ring light
-	double AREA_MINIMUM = 0.5; //Default Area minimum for particle as a percentage of total image area
+	Range RING_HUE_RANGE = {101, 225};	//Default hue range for ring light, old=64
+	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
+	Range RING_VAL_RANGE = {245, 255};	//Default value range for ring light old=230
+	float AREA_MINIMUM = 0.5; //Default Area minimum for particle as a percentage of total image area
 	double SCORE_MIN = 75.0;  //Minimum score to be considered a tote
 	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
@@ -72,7 +73,7 @@ public:
 
 	//CANTalon shootyMotor;
 
-	CANTalon shooter;
+	CANTalon shooterA;
 	CANTalon shooterB;
 
 	//----------------------SENSORS---------------------
@@ -118,10 +119,6 @@ public:
 	double screenPosX;
 	double screenPosY;
 
-	//----------------------PCM LOCATIONS--------------------------
-	const static int PCMA = 0;
-	const static int PCMB = 1;
-
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
 
@@ -130,7 +127,7 @@ public:
 	DoubleSolenoid shifter;
 
 	//Hanging
-	DoubleSolenoid goingUpA;
+	DoubleSolenoid goingUp;
 
 	//Shooter (Germany only)
 	DoubleSolenoid shootyStick;
@@ -145,17 +142,27 @@ public:
 	 */
 
 	Robot():
-		left(1),right(2),drive(left,right),mainStick(0),specials(1),pdp(0),
-		shifter(PCMA,0,1),goingUpA(PCMA,2,3)
-	,shooter(0),shooterB(1),shootyStick(PCMB,0,1),compressor(PCMA)//,
-	//angleMotor(2),lift(3)
-	//,shootyMotor(x)
+		left(CH_LEFTDRIVE),
+		right(CH_RIGHTDRIVE),
+		drive(left,right),
+		shooterA(CH_SHOOTERA),
+		shooterB(CH_SHOOTERB),
+		mainStick(CH_DRIVESTICK),
+		specials(CH_SPECIALSTICK),
+		pdp(CH_PDP),
+		shifter(CH_SHIFTER_PCM,CH_SHIFTER_FW,CH_SHIFTER_RV),
+		goingUp(CH_HANG_PCM,CH_HANG_FW,CH_HANG_RV),
+		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
+		compressor(CH_PCMA)//,
+	//angleMotor(2),
+	//lift(3),
+	//shootyMotor(x)
 	{
 
 		//--------Motor inversion----------------
 		//shooterB.SetControlMode(CANSpeedController::kFollower);
 		shooterB.SetInverted(false);
-		shooter.SetInverted(true);
+		shooterA.SetInverted(true);
 		//shooterB.Set(10);
 
 		//angleMotor.SetPositionMode();
@@ -164,6 +171,14 @@ public:
 
 	void RobotInit()
 	{
+		drive.SetSafetyEnabled(false);
+		left.SetSafetyEnabled(false);
+		right.SetSafetyEnabled(false);
+
+		SmartDashboard::PutNumber("X Target:",0);
+		SmartDashboard::PutNumber("Y Target:",0);
+		SmartDashboard::PutNumber("Angle Target:",0);
+
 		//--------------NAVX-MXP-------------------
 		try {
 			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
@@ -181,7 +196,7 @@ public:
 		autoMode = new SendableChooser();
 		autoMode->AddDefault("Auto Off", (void*)&AUTO_MODE_OFF);
 		autoMode->AddObject("Full Auto", (void*)&AUTO_MODE_FULL);
-		autoMode->AddObject("Breach Only (TEST)",(void*)&AUTO_MODE_BREACHTEST);
+		autoMode->AddObject("Breach Only (TESTING)",(void*)&AUTO_MODE_BREACHTEST);
 		SmartDashboard::PutData("Auto Modes", autoMode);
 
 		toBreach = new SendableChooser();
@@ -196,8 +211,10 @@ public:
 		{
 			def[j] = new SendableChooser();
 
+			//To display which is which (use random def to prevent crash)
+
 			//Add each option
-			def[j]->AddDefault("Portcullis", (void*)&AUTO_DEFTYPE_PORT);
+			def[j]->AddObject("Portcullis", (void*)&AUTO_DEFTYPE_PORT);
 			def[j]->AddObject("Cheval", (void*)&AUTO_DEFTYPE_CHEV);
 			def[j]->AddObject("Moat", (void*)&AUTO_DEFTYPE_MOAT);
 			def[j]->AddObject("Ramparts", (void*)&AUTO_DEFTYPE_RAMPARTS);
@@ -208,6 +225,11 @@ public:
 
 			SmartDashboard::PutData("Defense"+j, def[j]);
 		}
+
+		def[0]->AddDefault("Defense 2",(void*)&AUTO_DEFTYPE_RW);
+		def[1]->AddDefault("Defense 3",(void*)&AUTO_DEFTYPE_RW);
+		def[2]->AddDefault("Defense 4",(void*)&AUTO_DEFTYPE_RW);
+		def[3]->AddDefault("Defense 5",(void*)&AUTO_DEFTYPE_RW);
 
 		//------------------VISION---------------------
 		//Create image stuff
@@ -224,6 +246,14 @@ public:
 		}
 
 		IMAQdxStartAcquisition(session);
+
+
+		SmartDashboard::PutNumber("Tote hue min", RING_HUE_RANGE.minValue);
+		SmartDashboard::PutNumber("Tote hue max", RING_HUE_RANGE.maxValue);
+		SmartDashboard::PutNumber("Tote sat min", RING_SAT_RANGE.minValue);
+		SmartDashboard::PutNumber("Tote sat max", RING_SAT_RANGE.maxValue);
+		SmartDashboard::PutNumber("Tote val min", RING_VAL_RANGE.minValue);
+		SmartDashboard::PutNumber("Tote val max", RING_VAL_RANGE.maxValue);
 	}
 	/* ------------------------------------------------------------------------
 	 * 									Teleop
@@ -237,6 +267,58 @@ public:
 
 	void TeleopPeriodic()
 	{
+		SmartDashboard::PutNumber("X:",ahrs->GetDisplacementX());
+		SmartDashboard::PutNumber("Y:",ahrs->GetDisplacementY());
+		SmartDashboard::PutNumber("Angle:",ahrs->GetYaw());
+
+		if(mainStick.GetRawButton(3))
+		{
+			double tX = SmartDashboard::GetNumber("X Target:",0);
+			double tY = SmartDashboard::GetNumber("Y Target:",0);
+			double tA = SmartDashboard::GetNumber("Angle Target:",0);
+
+			NavigateTo(tX,tY);
+			RotateToAngle(tA);
+
+			return;
+		}
+
+		if(mainStick.GetRawButton(4))
+		{
+			ahrs->ResetDisplacement();
+			ahrs->ZeroYaw();
+		}
+
+		//------------------AUTOBREACH----------------------
+		//If button pressed, breach defType at selected position
+		if(mainStick.GetRawButton(BUT_BREACH2))
+		{
+			Breach(0);
+			return;
+		}
+		if(mainStick.GetRawButton(BUT_BREACH3))
+		{
+			Breach(1);
+			return;
+		}
+		if(mainStick.GetRawButton(BUT_BREACH4))
+		{
+			Breach(2);
+			return;
+		}
+		if(mainStick.GetRawButton(BUT_BREACH5))
+		{
+			Breach(3);
+			return;
+		}
+
+		//---------------AUTOAIM-------------------
+		if(specials.GetRawButton(BUT_AUTOAIMA) || specials.GetRawButton(BUT_AUTOAIMB))
+		{
+			SmartDashboard::PutBoolean("Is Target",AutoAim());
+			return;
+		}
+
 		//------------------CAMERA FEED---------------------
 		IMAQdxGrab(session, frame, true, NULL);
 		CameraServer::GetInstance()->SetImage(frame);
@@ -245,40 +327,40 @@ public:
 		drive.ArcadeDrive(mainStick);
 
 		//-----------------SHIFTER--------------------------
-		if(mainStick.GetRawButton(1))
+		if(mainStick.GetRawButton(BUT_SHIFTER))
 			shifter.Set(shifter.kForward);
 		else
 			shifter.Set(shifter.kReverse);
 
 		//-----------------HANGING-------------------------
-		if(mainStick.GetRawButton(2))
+		if(mainStick.GetRawButton(BUT_HANG))
 		{
-			goingUpA.Set(goingUpA.kForward);
+			goingUp.Set(goingUp.kForward);
 		}
 		else
 		{
-			goingUpA.Set(goingUpA.kReverse);
+			goingUp.Set(goingUp.kReverse);
 		}
 
 		//-------------------SHOOTER------------------
 
 		//Speed based on throttle lever, convert from -1<t<1 to 0<t<1
 		double speed = 0;
-		if(specials.GetRawButton(3)) speed=1;
-		else if(specials.GetRawButton(2)) speed=-1;
+		if(specials.GetRawButton(BUT_REVUP)) speed=1;
+		else if(specials.GetRawButton(BUT_SUCKIN)) speed=-1;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
 		speed*=mult;
 
 		//Set wheels to speed
-		shooter.Set(speed);
+		shooterA.Set(speed);
 		shooterB.Set(speed);
 
 		//Change status of solenoid to push ball into wheels (Germany)
 		//TODO: AMERICAN PORT
-		//Make wheel spin to push ball into shooter wheels (America)
-		if(specials.GetRawButton(1))
+		//Make wheel spin to push ball into shooterA wheels (America)
+		if(specials.GetRawButton(BUT_FIRE))
 		{
 			shootyStick.Set(shootyStick.kForward);
 			//shootyMotor.Set(1);
@@ -300,6 +382,8 @@ public:
 		{
 			angleMotor.Set(-1);
 		}
+		OR
+		angleMotor.Set(specials.GetY());
 		 */
 
 	}
@@ -318,7 +402,7 @@ public:
 	{
 		//Make sure nothing is moving when we start up again
 		drive.ArcadeDrive(0.0,0);
-		shooter.Set(0);
+		shooterA.Set(0);
 		shooterB.Set(0);
 	}
 
@@ -333,9 +417,7 @@ public:
 
 		//Disable motor safety so watchdogs don't lose their minds
 		drive.ArcadeDrive(0.0,0);
-		drive.SetSafetyEnabled(false);
-		left.SetSafetyEnabled(false);
-		right.SetSafetyEnabled(false);
+
 
 		//Get main auto mode
 		autoSelected = *((std::string*)autoMode->GetSelected());
@@ -406,7 +488,7 @@ public:
 			case 5:
 			{
 				//Fire
-				shooter.Set(1);
+				shooterA.Set(1);
 				shooterB.Set(1);
 				//Let motors spin up
 				Wait(1);
@@ -423,7 +505,7 @@ public:
 			{
 				//done
 				drive.ArcadeDrive(0.0,0);
-				shooter.Set(0);
+				shooterA.Set(0);
 				shooterB.Set(0);
 				shootyStick.Set(shootyStick.kReverse);
 				//shootyMotor.Set(0);
@@ -584,7 +666,7 @@ public:
 
 		//If code is still executing, we are facing the correct direction but not there yet.
 		//Drive forward
-		drive.ArcadeDrive(1,0);
+		drive.ArcadeDrive(0.5,0);
 
 		return false;
 	}
@@ -607,12 +689,12 @@ public:
 		if(currentAngle>targetAngle)
 		{
 			//Turn left
-			drive.ArcadeDrive(0.0,-1);
+			drive.ArcadeDrive(0.0,-0.5);
 		}
 		else
 		{
 			//Turn right
-			drive.ArcadeDrive(0.0,1);
+			drive.ArcadeDrive(0.0,0.5);
 		}
 		return false;
 	}
@@ -665,12 +747,12 @@ public:
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
-					drive.ArcadeDrive(0.0,0.3);
+					drive.ArcadeDrive(0.0,-0.48);
 				}
 				else
 				{
 					//Turn left
-					drive.ArcadeDrive(0.0,-0.3);
+					drive.ArcadeDrive(0.0,0.48);
 				}
 			}
 		}
@@ -680,6 +762,14 @@ public:
 
 	void VisionStuff()
 	{
+		/*RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("Tote hue min", RING_HUE_RANGE.minValue);
+		RING_HUE_RANGE.maxValue = SmartDashboard::GetNumber("Tote hue max", RING_HUE_RANGE.maxValue);
+		RING_SAT_RANGE.minValue = SmartDashboard::GetNumber("Tote sat min", RING_SAT_RANGE.minValue);
+		RING_SAT_RANGE.maxValue = SmartDashboard::GetNumber("Tote sat max", RING_SAT_RANGE.maxValue);
+		RING_VAL_RANGE.minValue = SmartDashboard::GetNumber("Tote val min", RING_VAL_RANGE.minValue);
+		RING_VAL_RANGE.maxValue = SmartDashboard::GetNumber("Tote val max", RING_VAL_RANGE.maxValue);
+	*/
+		//Retrieve an image from session, store into frame
 		IMAQdxGrab(session, frame, true, NULL);
 		//Threshold the image looking for ring light color
 		imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
