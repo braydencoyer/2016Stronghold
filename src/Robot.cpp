@@ -43,8 +43,8 @@ public:
 	//--------------------------VISION CONSTANTS-------------------
 	double TARGET_ORIGIN_X = 250;
 	double TARGET_ORIGIN_Y = 250;
-	double ORIGIN_X_TOL = 40;
-	double ORIGIN_Y_TOL = 40;
+	double ORIGIN_X_TOL = 20;
+	double ORIGIN_Y_TOL = 20;
 
 	Range RING_HUE_RANGE = {101, 225};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
@@ -717,6 +717,7 @@ public:
 		//Check if target is in correct spot (within tolerance) already
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
+			drive.ArcadeDrive(0.0,0.0);
 			return true;  //true=proceed to next action
 		}
 		else
