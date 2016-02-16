@@ -1,6 +1,7 @@
 #include "WPILib.h"
 #include "AHRS.h"
 #include "Channels.h"
+//#include <chrono>
 
 class Robot: public IterativeRobot
 {
@@ -14,6 +15,8 @@ public:
 	LiveWindow *lw = LiveWindow::GetInstance();
 
 	//Half speed 8
+
+	//std::chrono::time_point<std::chrono::system_clock> start,end;
 
 	//----------------------------AUTO MODE CONSTANTS-------------------
 	const std::string AUTO_MODE_OFF = "Off";
@@ -53,6 +56,11 @@ public:
 	double SCORE_MIN = 75.0;  //Minimum score to be considered a tote
 	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
+	double IMAGE_WIDTH = 500;
+
+	double DEGREES_PER_PIXEL = VIEW_ANGLE/IMAGE_WIDTH;
+	double ENCODER_TICKS_PER_PIXEL = 100;   //TODO Calculate ticks per pixel (experimental)
+
 	//Auto Modes
 	SendableChooser *autoMode;
 	SendableChooser *def[4];
@@ -68,13 +76,14 @@ public:
 	//-----------------------MOTORS-------------------------
 	Victor left, right;
 	RobotDrive drive;
-	//CANTalon angleMotor;
-	//CANTalon lift;
-
-	//CANTalon shootyMotor;
 
 	CANTalon shooterA;
 	CANTalon shooterB;
+	CANTalon angleMotor;
+
+	//CANTalon lift;
+
+	//CANTalon shootyMotor;
 
 	//----------------------SENSORS---------------------
 
@@ -134,7 +143,9 @@ public:
 
 	Compressor compressor;
 
-
+//--------------------------LIMIT SWITCHES--------------------------
+	DigitalInput angleBottom;
+	DigitalInput angleTop;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
@@ -147,16 +158,18 @@ public:
 		drive(left,right),
 		shooterA(CH_SHOOTERA),
 		shooterB(CH_SHOOTERB),
+		angleMotor(CH_ANGLEMOTOR),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
 		shifter(CH_SHIFTER_PCM,CH_SHIFTER_FW,CH_SHIFTER_RV),
 		goingUp(CH_HANG_PCM,CH_HANG_FW,CH_HANG_RV),
 		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
-		compressor(CH_PCMA)//,
-	//angleMotor(2),
+		compressor(CH_PCMA),
 	//lift(3),
 	//shootyMotor(x)
+		angleBottom(CH_SHOOTER_ANGLE_BOTTOM),
+		angleTop(CH_SHOOTER_ANGLE_TOP)
 	{
 
 		//--------Motor inversion----------------
@@ -165,20 +178,30 @@ public:
 		shooterA.SetInverted(true);
 		//shooterB.Set(10);
 
-		//angleMotor.SetPositionMode();
+		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
+		//angleMotor.SetControlMode(angleMotor.kPosition);
+		//angleMotor.ConfigEncoderCodesPerRev(1475);
+		//angleMotor.SetCloseLoopRampRate(0.25);
+		//angleMotor.SetPID(0.5,0,0);
 	}
 
 
 	void RobotInit()
 	{
+
+
 		drive.SetSafetyEnabled(false);
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
+
+		angleMotor.SetEncPosition(0);
 
 		SmartDashboard::PutNumber("X Target:",0);
 		SmartDashboard::PutNumber("Y Target:",0);
 		SmartDashboard::PutNumber("Angle Target:",0);
 
+
+		SmartDashboard::PutNumber("Encoder Target",0);
 		//--------------NAVX-MXP-------------------
 		try {
 			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
@@ -208,8 +231,17 @@ public:
 		SmartDashboard::PutData("Breach", toBreach);
 
 		for(int j=0;j<4;j++)
+				{
+					def[j] = new SendableChooser();
+				}
+
+		def[0]->AddDefault("Defense2",(void*)&AUTO_DEFTYPE_RW);
+		def[1]->AddDefault("Defense3",(void*)&AUTO_DEFTYPE_RW);
+		def[2]->AddDefault("Defense4",(void*)&AUTO_DEFTYPE_RW);
+		def[3]->AddDefault("Defense5",(void*)&AUTO_DEFTYPE_RW);
+
+		for(int j=0;j<4;j++)
 		{
-			def[j] = new SendableChooser();
 
 			//To display which is which (use random def to prevent crash)
 
@@ -222,14 +254,12 @@ public:
 			def[j]->AddObject("Sally Door", (void*)&AUTO_DEFTYPE_SALLY);
 			def[j]->AddObject("Rock Wall", (void*)&AUTO_DEFTYPE_RW);
 			def[j]->AddObject("Rough Terrain", (void*)&AUTO_DEFTYPE_RT);
-
-			SmartDashboard::PutData("Defense"+j, def[j]);
 		}
 
-		def[0]->AddDefault("Defense 2",(void*)&AUTO_DEFTYPE_RW);
-		def[1]->AddDefault("Defense 3",(void*)&AUTO_DEFTYPE_RW);
-		def[2]->AddDefault("Defense 4",(void*)&AUTO_DEFTYPE_RW);
-		def[3]->AddDefault("Defense 5",(void*)&AUTO_DEFTYPE_RW);
+		SmartDashboard::PutData("DefenseSelectTwo",def[0]);
+		SmartDashboard::PutData("DefenseSelectThree",def[1]);
+		SmartDashboard::PutData("DefenseSelectFour",def[2]);
+		SmartDashboard::PutData("DefenseSelectFive",def[3]);
 
 		//------------------VISION---------------------
 		//Create image stuff
@@ -262,14 +292,38 @@ public:
 
 	void TeleopInit()
 	{
-
+		//end = std::chrono::system_clock::now();
 	}
 
 	void TeleopPeriodic()
 	{
+
+		//start = std::chrono::system_clock::now();
+		//std::chrono::duration<double> elapsed_seconds = start-end;
+		//end=start;
+		//SmartDashboard::PutNumber("Periodic:",elapsed_seconds.count());
+
+		//---------------AUTOAIM-------------------
+		if(specials.GetRawButton(BUT_AUTOAIMA))
+		{
+			bool onTarget = AutoAimHardLoop();
+			SmartDashboard::PutBoolean("Is Target",onTarget);
+			return;
+		}
+		if(specials.GetRawButton(BUT_AUTOAIMB))
+		{
+			bool onTarget = AutoAimOffsetBased();
+			SmartDashboard::PutBoolean("Is Target",onTarget);
+			return;
+		}
+
 		SmartDashboard::PutNumber("X:",ahrs->GetDisplacementX());
 		SmartDashboard::PutNumber("Y:",ahrs->GetDisplacementY());
 		SmartDashboard::PutNumber("Angle:",ahrs->GetYaw());
+
+		SmartDashboard::PutNumber("Encoder Val:",angleMotor.GetEncPosition());
+
+
 
 		if(mainStick.GetRawButton(3))
 		{
@@ -312,12 +366,6 @@ public:
 			return;
 		}
 
-		//---------------AUTOAIM-------------------
-		if(specials.GetRawButton(BUT_AUTOAIMA) || specials.GetRawButton(BUT_AUTOAIMB))
-		{
-			SmartDashboard::PutBoolean("Is Target",AutoAim());
-			return;
-		}
 
 		//------------------CAMERA FEED---------------------
 		IMAQdxGrab(session, frame, true, NULL);
@@ -371,20 +419,19 @@ public:
 			//shootyMotor.Set(0);
 		}
 
-		//Shooter angle  (Disabled until added later)
-		//TODO Activate shooter angle & add smart systems
-		/*
-		if(specials.GetRawButton(6)||specials.GetRawButton(11))
+		//Shooter angle
+		double specialsY= specials.GetY();
+		if(mainStick.GetRawButton(5))
 		{
-			angleMotor.Set(1);
+			ShooterToAngle(SmartDashboard::GetNumber("Encoder Target",0));
 		}
-		else if(specials.GetRawButton(7) || specials.GetRawButton(10))
-		{
-			angleMotor.Set(-1);
-		}
-		OR
-		angleMotor.Set(specials.GetY());
-		 */
+		if(!angleBottom.Get() && specialsY<0) specialsY=0;
+		if(!angleTop.Get() && specialsY>0) specialsY=0;
+		angleMotor.Set(specialsY);
+
+
+		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
+		//SmartDashboard::PutNumber("Code Time:",elapsed_seconds1.count());
 
 	}
 
@@ -415,9 +462,7 @@ public:
 		//Auto state determines where we are in sequence, start at 0
 		autoState = 0;
 
-		//Disable motor safety so watchdogs don't lose their minds
 		drive.ArcadeDrive(0.0,0);
-
 
 		//Get main auto mode
 		autoSelected = *((std::string*)autoMode->GetSelected());
@@ -434,6 +479,8 @@ public:
 		{
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
+
+		ZeroShooter();
 
 		//Reset NavX in case it drifted while stationary
 		ahrs->ResetDisplacement();
@@ -466,18 +513,45 @@ public:
 			case 2:
 			{
 				//Drive to position on arc around tower
-				//if(!NavigateTo(0,1)) return; TODO Calculate Arc
+				if(!NavigateTo(0,1.5)) return; //TODO Calculate Arc, currently just approaches
 				break;
 			}
 			case 3:
 			{
-				//Initial firing sequence
-
-				//Raise angle up
-
+				//Rotate to face tower TODO Calculate angles to face tower
+				//Approx -30, -10, 20, 40
+				switch(breachPos)
+				{
+					case 0:
+					{
+						if(!RotateToAngle(40)) return;
+					}
+					case 1:
+					{
+						if(!RotateToAngle(20)) return;
+					}
+					case 2:
+					{
+						if(!RotateToAngle(-10)) return;
+					}
+					case 3:
+					{
+						if(!RotateToAngle(-30)) return;
+					}
+				}
+				autoState++;
 				break;
 			}
 			case 4:
+			{
+				//Initial firing sequence
+				//Raise angle up
+				//TODO Figure out angle
+				ShooterToAngle(500);
+
+				break;
+			}
+			case 5:
 			{
 				//Confirm & adjust using vision
 
@@ -485,7 +559,7 @@ public:
 				autoState++;
 				break;
 			}
-			case 5:
+			case 6:
 			{
 				//Fire
 				shooterA.Set(1);
@@ -501,7 +575,7 @@ public:
 
 				break;
 			}
-			case 6:
+			case 7:
 			{
 				//done
 				drive.ArcadeDrive(0.0,0);
@@ -614,7 +688,7 @@ public:
 	}
 
 	/*----------------------------------------------------------------------
-	 * 							NavX-MXP Navigation    TODO Test this
+	 * 							NavX-MXP Navigation    TODO Test & fix, see if Dead Reckoning will even work
 	 * ---------------------------------------------------------------------
 	 */
 
@@ -704,15 +778,46 @@ public:
 
 
 	/* ----------------------------------------------------------------------
-	 * 							Image Processing     TODO Test Vision
+	 * 							Image Processing
 	 * ----------------------------------------------------------------------
 	 */
 
+	bool AutoAimHardLoop()
+	{
+		while(!AutoAim() && specials.GetRawButton(BUT_AUTOAIMA)){};
+		return true;
+	}
+
+
+	bool AutoAimOffsetBased()
+	{
+		VisionStuff();
+
+		double imageOffsetX = TARGET_ORIGIN_X-screenPosX;
+		double imageOffsetY = TARGET_ORIGIN_Y-screenPosY;
+
+		//Check if at origin
+		if(abs(imageOffsetX)<ORIGIN_X_TOL && abs(imageOffsetY)<ORIGIN_Y_TOL)
+		{
+			return true;
+		}
+
+		//Adjust x
+		double imageOffsetXAngle = ahrs->GetYaw() + imageOffsetX * DEGREES_PER_PIXEL;
+		while(RotateToAngle(imageOffsetXAngle)){}
+
+		//Adjust y
+		double imageOffsetYTicks = angleMotor.GetEncPosition() + imageOffsetY * ENCODER_TICKS_PER_PIXEL;
+		ShooterToAngle((int)imageOffsetYTicks);
+
+		return false;
+
+	}
 
 	bool AutoAim()
 	{
 		//Process image, storing origin in screenPosX and screenPosY
-		VisionStuff();
+		VisionStuffFaster();
 
 		//Check if target is in correct spot (within tolerance) already
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
@@ -729,7 +834,6 @@ public:
 				//L/R is within tolerance
 				//Need up/down adjustment
 				drive.ArcadeDrive(0.0,0.0);
-				/*TODO Activate this when motors are added
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Decrease angle
@@ -740,7 +844,7 @@ public:
 					//Increase angle
 					angleMotor.Set(0.3);
 				}
-				 */
+
 			}
 			else
 			{
@@ -748,12 +852,12 @@ public:
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
-					drive.ArcadeDrive(0.0,-0.48);
+					drive.ArcadeDrive(0.0,-0.4);
 				}
 				else
 				{
 					//Turn left
-					drive.ArcadeDrive(0.0,0.48);
+					drive.ArcadeDrive(0.0,0.4);
 				}
 			}
 		}
@@ -831,6 +935,56 @@ public:
 		}
 	}
 
+	void VisionStuffFaster()
+		{
+			//Retrieve an image from session, store into frame
+			IMAQdxGrab(session, frame, true, NULL);
+			//Threshold the image looking for ring light color
+			imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
+
+			//Count particles in the image
+			int numParticles = 0;
+			//filter out small particles
+			criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
+			imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
+
+			//Send particle count after filtering for size to dashboard
+			imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
+
+			//Make sure we even have particles to look at (crash prevention)
+			if(numParticles > 0) {
+				ParticleReport best;
+				best.Area=0;
+				for(int particleIndex = 0; particleIndex < numParticles; particleIndex++)
+				{
+					double newParticleArea;
+					double oldParticleArea = best.Area;
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &newParticleArea);
+					if(newParticleArea>oldParticleArea)
+					{
+						//Replace particle in memory
+						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(best.PercentAreaToImageArea));
+						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &(best.Area));
+						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(best.BoundingRectTop));
+						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(best.BoundingRectLeft));
+						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(best.BoundingRectBottom));
+						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(best.BoundingRectRight));
+					}
+				}
+				//Origin of particle is average of edges, update variables accordingly
+				screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
+				screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
+
+				SmartDashboard::PutNumber("Target X", screenPosX);
+				SmartDashboard::PutNumber("Target Y", screenPosY);
+
+
+			} else {
+				//Somehow, there were no particles on the screen. This exists to stop a crash.
+			}
+		}
+
+
 	//Send the filtered image to the dashboard if there isn't an error
 	void SendToDashboard(Image *image, int error)
 	{
@@ -847,6 +1001,33 @@ public:
 	{
 		//we want descending sort order
 		return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
+	}
+
+/* -------------------------------------------------------------------
+ * 							Encoder Stuff
+ * -------------------------------------------------------------------
+ */
+
+	void ShooterToAngle(int target)
+	{
+		if(target<angleMotor.GetEncPosition())
+		{
+			angleMotor.Set(-0.5);
+			while(target<angleMotor.GetEncPosition() && !angleBottom.Get()){};
+		}
+		else if(target>angleMotor.GetEncPosition())
+		{
+			angleMotor.Set(0.5);
+			while(target>angleMotor.GetEncPosition() && !angleTop.Get()){};
+		}
+	}
+
+	void ZeroShooter()
+	{
+		angleMotor.Set(-0.5);
+		while(!angleBottom.Get()){}
+		angleMotor.Set(0);
+		angleMotor.SetEncPosition(0);
 	}
 
 };

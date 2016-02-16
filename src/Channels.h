@@ -10,8 +10,14 @@
 const static int CH_LEFTDRIVE = 1;
 const static int CH_RIGHTDRIVE = 2;
 
-const static int CH_SHOOTERA = 0;
+const static int CH_SHOOTERA = 0;//TODO Swap
 const static int CH_SHOOTERB = 1;
+
+const static int CH_ANGLEMOTOR = 2;
+
+//-------------------LIMIT SWITCHES------------
+const static int CH_SHOOTER_ANGLE_BOTTOM = 0;
+const static int CH_SHOOTER_ANGLE_TOP = 1;
 
 //--------------------HUMAN INPUT--------------
 const static int CH_DRIVESTICK = 0;
@@ -32,11 +38,11 @@ const static int CH_HANG_PCM = CH_PCMA;
 const static int CH_HANG_FW = 2;
 const static int CH_HANG_RV = 3;
 
-//--------Things not added yet TODO Set Channels---------
 const static int CH_SHOOTSTICK_PCM = CH_PCMA;
 const static int CH_SHOOTSTICK_FW = 6;
 const static int CH_SHOOTSTICK_RV = 7;
-const static int CH_ANGLEMOTOR = 2;
+
+//--------Things not added yet TODO Set Channels---------
 const static int CH_LIFTMOTOR = 3;
 const static int CH_SHOOTMOTOR = 4;
 
