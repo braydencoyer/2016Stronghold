@@ -10,7 +10,7 @@
 const static int CH_LEFTDRIVE = 1;
 const static int CH_RIGHTDRIVE = 2;
 
-const static int CH_SHOOTERA = 0;//TODO Swap
+const static int CH_SHOOTERA = 0;
 const static int CH_SHOOTERB = 1;
 
 const static int CH_ANGLEMOTOR = 2;

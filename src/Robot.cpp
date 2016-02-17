@@ -40,14 +40,14 @@ public:
 
 
 	//---------------------------NAVX CONSTANTS--------------------
-	double ANGLE_TOLERANCE = 10;   //Degrees
+	double ANGLE_TOLERANCE = 2;   //Degrees
 	double XY_TOLERANCE = 0.1;  //Meters
 
 	//--------------------------VISION CONSTANTS-------------------
-	double TARGET_ORIGIN_X = 250;
-	double TARGET_ORIGIN_Y = 250;
-	double ORIGIN_X_TOL = 20;
-	double ORIGIN_Y_TOL = 20;
+	int TARGET_ORIGIN_X = 250;
+	int TARGET_ORIGIN_Y = 250;
+	int ORIGIN_X_TOL = 10;
+	int ORIGIN_Y_TOL = 10;
 
 	Range RING_HUE_RANGE = {101, 225};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
@@ -188,8 +188,6 @@ public:
 
 	void RobotInit()
 	{
-
-
 		drive.SetSafetyEnabled(false);
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
@@ -200,8 +198,8 @@ public:
 		SmartDashboard::PutNumber("Y Target:",0);
 		SmartDashboard::PutNumber("Angle Target:",0);
 
-
 		SmartDashboard::PutNumber("Encoder Target",0);
+
 		//--------------NAVX-MXP-------------------
 		try {
 			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
@@ -306,34 +304,24 @@ public:
 		//---------------AUTOAIM-------------------
 		if(specials.GetRawButton(BUT_AUTOAIMA))
 		{
-			bool onTarget = AutoAimHardLoop();
-			SmartDashboard::PutBoolean("Is Target",onTarget);
+			AutoAimHardLoop();
 			return;
 		}
 		if(specials.GetRawButton(BUT_AUTOAIMB))
 		{
-			bool onTarget = AutoAimOffsetBased();
-			SmartDashboard::PutBoolean("Is Target",onTarget);
+			VisionStuff();
 			return;
 		}
 
-		SmartDashboard::PutNumber("X:",ahrs->GetDisplacementX());
-		SmartDashboard::PutNumber("Y:",ahrs->GetDisplacementY());
 		SmartDashboard::PutNumber("Angle:",ahrs->GetYaw());
 
 		SmartDashboard::PutNumber("Encoder Val:",angleMotor.GetEncPosition());
 
-
-
 		if(mainStick.GetRawButton(3))
 		{
-			double tX = SmartDashboard::GetNumber("X Target:",0);
-			double tY = SmartDashboard::GetNumber("Y Target:",0);
 			double tA = SmartDashboard::GetNumber("Angle Target:",0);
 
-			NavigateTo(tX,tY);
 			RotateToAngle(tA);
-
 			return;
 		}
 
@@ -369,6 +357,7 @@ public:
 
 		//------------------CAMERA FEED---------------------
 		IMAQdxGrab(session, frame, true, NULL);
+		imaqDrawShapeOnImage(frame, frame, { TARGET_ORIGIN_X, TARGET_ORIGIN_Y,ORIGIN_X_TOL,ORIGIN_Y_TOL}, DrawMode::IMAQ_DRAW_VALUE, ShapeMode::IMAQ_SHAPE_RECT, 0.0f);
 		CameraServer::GetInstance()->SetImage(frame);
 
 		//-----------------DRIVE SYSTEM---------------------
@@ -499,7 +488,8 @@ public:
 			{
 			case 0: {
 				//Move forward 1.12 meters
-				if(!NavigateTo(0,1.12)) return;
+				//if(!NavigateTo(0,1.12)) return;
+				//TODO Write with wait statements
 				autoState++;
 				break;
 			}
@@ -513,7 +503,8 @@ public:
 			case 2:
 			{
 				//Drive to position on arc around tower
-				if(!NavigateTo(0,1.5)) return; //TODO Calculate Arc, currently just approaches
+				//if(!NavigateTo(0,1.5)) return;
+				//TODO Write with wait statements
 				break;
 			}
 			case 3:
@@ -688,63 +679,9 @@ public:
 	}
 
 	/*----------------------------------------------------------------------
-	 * 							NavX-MXP Navigation    TODO Test & fix, see if Dead Reckoning will even work
+	 * 							NavX-MXP Navigation
 	 * ---------------------------------------------------------------------
 	 */
-
-	//IMPORTANT: All accel values ARE displaced by current orientation; as such, so are dispacements!!!
-	bool NavigateTo(double xTarget, double yTarget)
-	{
-		//This function will get called periodically, returning true when the correct position is reached
-
-		//Get current location (swapped due to 3d to 2d conversion)
-		double currentY = ahrs->GetDisplacementX();
-		double currentX = ahrs->GetDisplacementY();
-
-		//Get offset between target and location (place origin on robot)
-		double xOff = xTarget-currentX;
-		double yOff = yTarget-currentY;
-
-		//Check if within tolerance
-		if(abs(xOff)<XY_TOLERANCE && abs(yOff)<XY_TOLERANCE)
-		{
-			//At or close enough to location, true=proceed to next action
-			return true;
-		}
-
-		//Not at location yet
-		//Turn to face target, stop this execution if turning
-		//Adjust if xOff is exactly 0 to prevent y/0 crash just in case
-		if(xOff==0) xOff = 0.0000000000001;
-		double angle = atan(abs(yOff)/abs(xOff));
-
-		//If still rotating, return false to halt execution
-		//Manually select quadrant because arctan can be unpredictable
-		//This also handles the annoying Cartesian to Polar conversion
-		if(xOff>0&&yOff>0)
-		{
-			if(!RotateToAngle(90-angle)) return false;
-		}
-		else if(xOff<0&&yOff>0)
-		{
-			if(!RotateToAngle(-(90-angle))) return false;
-		}
-		else if(xOff>0&&yOff<0)
-		{
-			if(!RotateToAngle(90+angle)) return false;
-		}
-		else if(xOff>0&&yOff>0)
-		{
-			if(!RotateToAngle(-(90+angle))) return false;
-		}
-
-		//If code is still executing, we are facing the correct direction but not there yet.
-		//Drive forward
-		drive.ArcadeDrive(0.5,0);
-
-		return false;
-	}
-
 
 	bool RotateToAngle(double targetAngle)
 	{
@@ -754,7 +691,8 @@ public:
 		double currentAngle = ahrs->GetYaw();
 
 		//If at angle already, stop and return
-		if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
+		//if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
+		if(abs(currentAngle-targetAngle)<ANGLE_TOLERANCE)
 		{
 			return true;  //true=proceed to next action
 		}
@@ -763,12 +701,12 @@ public:
 		if(currentAngle>targetAngle)
 		{
 			//Turn left
-			drive.ArcadeDrive(0.0,-0.5);
+			drive.ArcadeDrive(0.0,0.5);
 		}
 		else
 		{
 			//Turn right
-			drive.ArcadeDrive(0.0,0.5);
+			drive.ArcadeDrive(0.0,-0.5);
 		}
 		return false;
 	}
@@ -784,34 +722,8 @@ public:
 
 	bool AutoAimHardLoop()
 	{
-		while(!AutoAim() && specials.GetRawButton(BUT_AUTOAIMA)){};
+		while(!AutoAim() && (specials.GetRawButton(BUT_AUTOAIMA) || IsAutonomous())){};
 		return true;
-	}
-
-
-	bool AutoAimOffsetBased()
-	{
-		VisionStuff();
-
-		double imageOffsetX = TARGET_ORIGIN_X-screenPosX;
-		double imageOffsetY = TARGET_ORIGIN_Y-screenPosY;
-
-		//Check if at origin
-		if(abs(imageOffsetX)<ORIGIN_X_TOL && abs(imageOffsetY)<ORIGIN_Y_TOL)
-		{
-			return true;
-		}
-
-		//Adjust x
-		double imageOffsetXAngle = ahrs->GetYaw() + imageOffsetX * DEGREES_PER_PIXEL;
-		while(RotateToAngle(imageOffsetXAngle)){}
-
-		//Adjust y
-		double imageOffsetYTicks = angleMotor.GetEncPosition() + imageOffsetY * ENCODER_TICKS_PER_PIXEL;
-		ShooterToAngle((int)imageOffsetYTicks);
-
-		return false;
-
 	}
 
 	bool AutoAim()
@@ -823,6 +735,7 @@ public:
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
 			drive.ArcadeDrive(0.0,0.0);
+			angleMotor.Set(0);
 			return true;  //true=proceed to next action
 		}
 		else
@@ -849,15 +762,35 @@ public:
 			else
 			{
 				//Need L/R adjustment before proceeding
-				if(screenPosX>TARGET_ORIGIN_X)
+				if(abs(screenPosX-TARGET_ORIGIN_X)<100)
 				{
-					//Turn right
-					drive.ArcadeDrive(0.0,-0.4);
+					if(screenPosX>TARGET_ORIGIN_X)
+					{
+						//Turn right
+						drive.ArcadeDrive(0.0,-0.45);
+						Wait(0.1);
+						drive.ArcadeDrive(0.0,0.0);
+					}
+					else
+					{
+						//Turn left
+						drive.ArcadeDrive(0.0,0.45);
+						Wait(0.1);
+						drive.ArcadeDrive(0.0,0.0);
+					}
 				}
 				else
 				{
-					//Turn left
-					drive.ArcadeDrive(0.0,0.4);
+					if(screenPosX>TARGET_ORIGIN_X)
+					{
+						//Turn right
+						drive.ArcadeDrive(0.0,-0.45);
+					}
+					else
+					{
+						//Turn left
+						drive.ArcadeDrive(0.0,0.45);
+					}
 				}
 			}
 		}
@@ -865,15 +798,15 @@ public:
 	}
 
 
-	void VisionStuff()
+	void VisionStuff()//For tuning vision
 	{
-		/*RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("Tote hue min", RING_HUE_RANGE.minValue);
+		RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("Tote hue min", RING_HUE_RANGE.minValue);
 		RING_HUE_RANGE.maxValue = SmartDashboard::GetNumber("Tote hue max", RING_HUE_RANGE.maxValue);
 		RING_SAT_RANGE.minValue = SmartDashboard::GetNumber("Tote sat min", RING_SAT_RANGE.minValue);
 		RING_SAT_RANGE.maxValue = SmartDashboard::GetNumber("Tote sat max", RING_SAT_RANGE.maxValue);
 		RING_VAL_RANGE.minValue = SmartDashboard::GetNumber("Tote val min", RING_VAL_RANGE.minValue);
 		RING_VAL_RANGE.maxValue = SmartDashboard::GetNumber("Tote val max", RING_VAL_RANGE.maxValue);
-	*/
+
 		//Retrieve an image from session, store into frame
 		IMAQdxGrab(session, frame, true, NULL);
 		//Threshold the image looking for ring light color
@@ -1013,12 +946,12 @@ public:
 		if(target<angleMotor.GetEncPosition())
 		{
 			angleMotor.Set(-0.5);
-			while(target<angleMotor.GetEncPosition() && !angleBottom.Get()){};
+			while(target<angleMotor.GetEncPosition() && angleBottom.Get()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
 			angleMotor.Set(0.5);
-			while(target>angleMotor.GetEncPosition() && !angleTop.Get()){};
+			while(target>angleMotor.GetEncPosition() && angleTop.Get()){};
 		}
 	}
 
