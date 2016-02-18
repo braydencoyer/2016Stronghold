@@ -14,8 +14,6 @@ public:
 
 	LiveWindow *lw = LiveWindow::GetInstance();
 
-	//Half speed 8
-
 	//std::chrono::time_point<std::chrono::system_clock> start,end;
 
 	//----------------------------AUTO MODE CONSTANTS-------------------
@@ -23,6 +21,7 @@ public:
 	const std::string AUTO_MODE_FULL = "Full";
 	const std::string AUTO_MODE_BREACHTEST = "Breach";
 
+	const std::string BREACH_POS_LB = "LB";
 	const std::string BREACH_POS_0 = "0";
 	const std::string BREACH_POS_1 = "1";
 	const std::string BREACH_POS_2 = "2";
@@ -41,7 +40,6 @@ public:
 
 	//---------------------------NAVX CONSTANTS--------------------
 	double ANGLE_TOLERANCE = 2;   //Degrees
-	double XY_TOLERANCE = 0.1;  //Meters
 
 	//--------------------------VISION CONSTANTS-------------------
 	int TARGET_ORIGIN_X = 250;
@@ -52,14 +50,8 @@ public:
 	Range RING_HUE_RANGE = {101, 225};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
 	Range RING_VAL_RANGE = {245, 255};	//Default value range for ring light old=230
-	float AREA_MINIMUM = 0.5; //Default Area minimum for particle as a percentage of total image area
-	double SCORE_MIN = 75.0;  //Minimum score to be considered a tote
+	float AREA_MINIMUM = 0.5; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
-
-	double IMAGE_WIDTH = 500;
-
-	double DEGREES_PER_PIXEL = VIEW_ANGLE/IMAGE_WIDTH;
-	double ENCODER_TICKS_PER_PIXEL = 100;   //TODO Calculate ticks per pixel (experimental)
 
 	//Auto Modes
 	SendableChooser *autoMode;
@@ -80,10 +72,6 @@ public:
 	CANTalon shooterA;
 	CANTalon shooterB;
 	CANTalon angleMotor;
-
-	//CANTalon lift;
-
-	//CANTalon shootyMotor;
 
 	//----------------------SENSORS---------------------
 
@@ -133,17 +121,18 @@ public:
 
 
 	//-------------------------PNEUMATICS---------------------------
+	//Shifter
 	DoubleSolenoid shifter;
 
 	//Hanging
 	DoubleSolenoid goingUp;
 
-	//Shooter (Germany only)
+	//Thing that pushes balls into wheels
 	DoubleSolenoid shootyStick;
 
 	Compressor compressor;
 
-//--------------------------LIMIT SWITCHES--------------------------
+	//--------------------------LIMIT SWITCHES--------------------------
 	DigitalInput angleBottom;
 	DigitalInput angleTop;
 
@@ -166,8 +155,6 @@ public:
 		goingUp(CH_HANG_PCM,CH_HANG_FW,CH_HANG_RV),
 		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
 		compressor(CH_PCMA),
-	//lift(3),
-	//shootyMotor(x)
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM),
 		angleTop(CH_SHOOTER_ANGLE_TOP)
 	{
@@ -221,6 +208,7 @@ public:
 		SmartDashboard::PutData("Auto Modes", autoMode);
 
 		toBreach = new SendableChooser();
+		toBreach->AddObject("1 (Lowbar)",(void*)&BREACH_POS_LB);
 		toBreach->AddDefault("2",(void*)&BREACH_POS_0);
 		toBreach->AddObject("3",(void*)&BREACH_POS_1);
 		toBreach->AddObject("4",(void*)&BREACH_POS_2);
@@ -229,9 +217,9 @@ public:
 		SmartDashboard::PutData("Breach", toBreach);
 
 		for(int j=0;j<4;j++)
-				{
-					def[j] = new SendableChooser();
-				}
+		{
+			def[j] = new SendableChooser();
+		}
 
 		def[0]->AddDefault("Defense2",(void*)&AUTO_DEFTYPE_RW);
 		def[1]->AddDefault("Defense3",(void*)&AUTO_DEFTYPE_RW);
@@ -307,14 +295,15 @@ public:
 			AutoAimHardLoop();
 			return;
 		}
+		//This is for mask tuning only
 		if(specials.GetRawButton(BUT_AUTOAIMB))
 		{
 			VisionStuff();
 			return;
 		}
 
+		//---------------------Debug outs & testing functions, disable for comp-------------
 		SmartDashboard::PutNumber("Angle:",ahrs->GetYaw());
-
 		SmartDashboard::PutNumber("Encoder Val:",angleMotor.GetEncPosition());
 
 		if(mainStick.GetRawButton(3))
@@ -394,18 +383,14 @@ public:
 		shooterA.Set(speed);
 		shooterB.Set(speed);
 
-		//Change status of solenoid to push ball into wheels (Germany)
-		//TODO: AMERICAN PORT
-		//Make wheel spin to push ball into shooterA wheels (America)
+		//Change status of solenoid to push ball into wheels
 		if(specials.GetRawButton(BUT_FIRE))
 		{
-			shootyStick.Set(shootyStick.kForward);
-			//shootyMotor.Set(1);
+			shootyStick.Set(shootyStick.kReverse);
 		}
 		else
 		{
-			shootyStick.Set(shootyStick.kReverse);
-			//shootyMotor.Set(0);
+			shootyStick.Set(shootyStick.kForward);
 		}
 
 		//Shooter angle
@@ -440,6 +425,12 @@ public:
 		drive.ArcadeDrive(0.0,0);
 		shooterA.Set(0);
 		shooterB.Set(0);
+		angleMotor.Set(0);
+
+		//Reset pneumatics (remove if needed)
+		shootyStick.Set(shootyStick.kForward);
+		goingUp.Set(goingUp.kReverse);
+		shifter.Set(shifter.kReverse);
 	}
 
 	/**----------------------------------------------------------------------
@@ -490,6 +481,9 @@ public:
 				//Move forward 1.12 meters
 				//if(!NavigateTo(0,1.12)) return;
 				//TODO Write with wait statements
+				drive.ArcadeDrive(1.0,0);
+				Wait(1);
+				drive.ArcadeDrive(0.0,0);
 				autoState++;
 				break;
 			}
@@ -505,6 +499,9 @@ public:
 				//Drive to position on arc around tower
 				//if(!NavigateTo(0,1.5)) return;
 				//TODO Write with wait statements
+				drive.ArcadeDrive(1.0,0);
+				Wait(1);
+				drive.ArcadeDrive(0.0,0);
 				break;
 			}
 			case 3:
@@ -513,22 +510,22 @@ public:
 				//Approx -30, -10, 20, 40
 				switch(breachPos)
 				{
-					case 0:
-					{
-						if(!RotateToAngle(40)) return;
-					}
-					case 1:
-					{
-						if(!RotateToAngle(20)) return;
-					}
-					case 2:
-					{
-						if(!RotateToAngle(-10)) return;
-					}
-					case 3:
-					{
-						if(!RotateToAngle(-30)) return;
-					}
+				case 0:
+				{
+					if(!RotateToAngle(40)) return;
+				}
+				case 1:
+				{
+					if(!RotateToAngle(20)) return;
+				}
+				case 2:
+				{
+					if(!RotateToAngle(-10)) return;
+				}
+				case 3:
+				{
+					if(!RotateToAngle(-30)) return;
+				}
 				}
 				autoState++;
 				break;
@@ -545,7 +542,6 @@ public:
 			case 5:
 			{
 				//Confirm & adjust using vision
-
 				if(!AutoAim()) break;
 				autoState++;
 				break;
@@ -558,9 +554,8 @@ public:
 				//Let motors spin up
 				Wait(1);
 
-				//Fire TODO American port
+				//Fire
 				shootyStick.Set(shootyStick.kForward);
-				//shootyMotor.Set(1);
 				Wait(1);
 				autoState++;
 
@@ -651,11 +646,13 @@ public:
 	void BreachMoat()
 	{
 		DriverStation::ReportError("Breaching Moat");
+		//Just drive?
 	}
 
 	void BreachRamparts()
 	{
 		DriverStation::ReportError("Breaching Ramparts");
+		//Just drive?
 	}
 
 	void BreachDrawbridge()
@@ -671,11 +668,13 @@ public:
 	void BreachRockWall()
 	{
 		DriverStation::ReportError("Breaching Rock Wall");
+		//Just drive?
 	}
 
 	void BreachRoughTerrain()
 	{
 		DriverStation::ReportError("Breaching Rough Terrain");
+		//Just drive?
 	}
 
 	/*----------------------------------------------------------------------
@@ -798,7 +797,7 @@ public:
 	}
 
 
-	void VisionStuff()//For tuning vision
+	void VisionStuff()//For tuning vision constants only
 	{
 		RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("Tote hue min", RING_HUE_RANGE.minValue);
 		RING_HUE_RANGE.maxValue = SmartDashboard::GetNumber("Tote hue max", RING_HUE_RANGE.maxValue);
@@ -864,64 +863,64 @@ public:
 
 
 		} else {
-			//Somehow, there were no particles on the screen. This exists to stop a crash.
+			//Somehow, there were no particles on the screen. This exists to stop a crash (vecotor index out of bounds)
 		}
 	}
 
 	void VisionStuffFaster()
-		{
-			//Retrieve an image from session, store into frame
-			IMAQdxGrab(session, frame, true, NULL);
-			//Threshold the image looking for ring light color
-			imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
+	{
+		//Retrieve an image from session, store into frame
+		IMAQdxGrab(session, frame, true, NULL);
+		//Threshold the image looking for ring light color
+		imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
 
-			//Count particles in the image
-			int numParticles = 0;
-			//filter out small particles
-			criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
-			imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
+		//Count particles in the image
+		int numParticles = 0;
+		//filter out small particles
+		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
+		imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
 
-			//Send particle count after filtering for size to dashboard
-			imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
+		//Send particle count after filtering for size to dashboard
+		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
 
-			//Make sure we even have particles to look at (crash prevention)
-			if(numParticles > 0) {
-				ParticleReport best;
-				best.Area=0;
-				for(int particleIndex = 0; particleIndex < numParticles; particleIndex++)
+		//Make sure we even have particles to look at (crash prevention)
+		if(numParticles > 0) {
+			ParticleReport best;
+			best.Area=0;
+			for(int particleIndex = 0; particleIndex < numParticles; particleIndex++)
+			{
+				double newParticleArea;
+				double oldParticleArea = best.Area;
+				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &newParticleArea);
+				if(newParticleArea>oldParticleArea)
 				{
-					double newParticleArea;
-					double oldParticleArea = best.Area;
-					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &newParticleArea);
-					if(newParticleArea>oldParticleArea)
-					{
-						//Replace particle in memory
-						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(best.PercentAreaToImageArea));
-						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &(best.Area));
-						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(best.BoundingRectTop));
-						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(best.BoundingRectLeft));
-						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(best.BoundingRectBottom));
-						imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(best.BoundingRectRight));
-					}
+					//Replace particle in memory
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(best.PercentAreaToImageArea));
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA, &(best.Area));
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(best.BoundingRectTop));
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(best.BoundingRectLeft));
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(best.BoundingRectBottom));
+					imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(best.BoundingRectRight));
 				}
-				//Origin of particle is average of edges, update variables accordingly
-				screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
-				screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
-
-				SmartDashboard::PutNumber("Target X", screenPosX);
-				SmartDashboard::PutNumber("Target Y", screenPosY);
-
-
-			} else {
-				//Somehow, there were no particles on the screen. This exists to stop a crash.
 			}
+			//Origin of particle is average of edges, update variables accordingly
+			screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
+			screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
+
+			SmartDashboard::PutNumber("Target X", screenPosX);
+			SmartDashboard::PutNumber("Target Y", screenPosY);
+
+
+		} else {
+			//Somehow, there were no particles big enough on the screen. This exists to stop a crash.
+			drive.ArcadeDrive(0.0,0.7);
 		}
+	}
 
 
 	//Send the filtered image to the dashboard if there isn't an error
 	void SendToDashboard(Image *image, int error)
 	{
-		//DriverStation::ReportError("Sending to dashboard");
 		if(error < ERR_SUCCESS) {
 			DriverStation::ReportError("[ERROR]Send To Dashboard error: " + std::to_string((long)imaqError) + "\n");
 		} else {
@@ -936,29 +935,29 @@ public:
 		return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
 	}
 
-/* -------------------------------------------------------------------
- * 							Encoder Stuff
- * -------------------------------------------------------------------
- */
+	/* -------------------------------------------------------------------
+	 * 							Encoder Stuff
+	 * -------------------------------------------------------------------
+	 */
 
 	void ShooterToAngle(int target)
 	{
 		if(target<angleMotor.GetEncPosition())
 		{
 			angleMotor.Set(-0.5);
-			while(target<angleMotor.GetEncPosition() && angleBottom.Get()){};
+			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && IsEnabled()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
 			angleMotor.Set(0.5);
-			while(target>angleMotor.GetEncPosition() && angleTop.Get()){};
+			while(target>angleMotor.GetEncPosition() && angleTop.Get() && IsEnabled()){};
 		}
 	}
 
 	void ZeroShooter()
 	{
 		angleMotor.Set(-0.5);
-		while(!angleBottom.Get()){}
+		while(!angleBottom.Get() && IsEnabled() && IsAutonomous()){}
 		angleMotor.Set(0);
 		angleMotor.SetEncPosition(0);
 	}

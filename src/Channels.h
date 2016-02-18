@@ -42,10 +42,6 @@ const static int CH_SHOOTSTICK_PCM = CH_PCMA;
 const static int CH_SHOOTSTICK_FW = 6;
 const static int CH_SHOOTSTICK_RV = 7;
 
-//--------Things not added yet TODO Set Channels---------
-const static int CH_LIFTMOTOR = 3;
-const static int CH_SHOOTMOTOR = 4;
-
 
 
 /* ----------------------------------------------------------------
