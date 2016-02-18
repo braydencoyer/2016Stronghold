@@ -1,6 +1,7 @@
 #include "WPILib.h"
 #include "AHRS.h"
 #include "Channels.h"
+#include "LimitSwitch.cpp"
 //#include <chrono>
 
 class Robot: public IterativeRobot
@@ -51,7 +52,7 @@ public:
 	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
 	Range RING_VAL_RANGE = {245, 255};	//Default value range for ring light old=230
 	float AREA_MINIMUM = 0.5; //Area minimum for particle as a percentage of total image area
-	double VIEW_ANGLE = 60; //View angle fo camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
+	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	//Auto Modes
 	SendableChooser *autoMode;
@@ -133,8 +134,8 @@ public:
 	Compressor compressor;
 
 	//--------------------------LIMIT SWITCHES--------------------------
-	DigitalInput angleBottom;
-	DigitalInput angleTop;
+	LimitSwitch angleBottom;
+	LimitSwitch angleTop;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
@@ -155,8 +156,8 @@ public:
 		goingUp(CH_HANG_PCM,CH_HANG_FW,CH_HANG_RV),
 		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
 		compressor(CH_PCMA),
-		angleBottom(CH_SHOOTER_ANGLE_BOTTOM),
-		angleTop(CH_SHOOTER_ANGLE_TOP)
+		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
+		angleTop(CH_SHOOTER_ANGLE_TOP,true)
 	{
 
 		//--------Motor inversion----------------
