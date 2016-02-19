@@ -20,7 +20,13 @@ public:
 	//----------------------------AUTO MODE CONSTANTS-------------------
 	const std::string AUTO_MODE_OFF = "Off";
 	const std::string AUTO_MODE_FULL = "Full";
-	const std::string AUTO_MODE_BREACHTEST = "Breach";
+	const std::string AUTO_MODE_BREACHTEST = "BreachTest";
+	const std::string AUTO_MODE_APROACHTEST = "ApproachTest";
+	const std::string AUTO_MODE_CLEARTEST = "ClearTest";
+	const std::string AUTO_MODE_ROTATETEST = "RotateTest";
+	const std::string AUTO_MODE_VISIONTEST = "VisionTest";
+	const std::string AUTO_MODE_FIRETEST = "FireTest";
+	const std::string AUTO_MODE_RAISETEST = "RaiseTest";
 
 	const std::string BREACH_POS_LB = "LB";
 	const std::string BREACH_POS_0 = "0";
@@ -167,6 +173,8 @@ public:
 		//shooterB.Set(10);
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
+		angleMotor.SetInverted(true);
+		//angleMotor.SetSensorDirection(false);
 		//angleMotor.SetControlMode(angleMotor.kPosition);
 		//angleMotor.ConfigEncoderCodesPerRev(1475);
 		//angleMotor.SetCloseLoopRampRate(0.25);
@@ -182,8 +190,6 @@ public:
 
 		angleMotor.SetEncPosition(0);
 
-		SmartDashboard::PutNumber("X Target:",0);
-		SmartDashboard::PutNumber("Y Target:",0);
 		SmartDashboard::PutNumber("Angle Target:",0);
 
 		SmartDashboard::PutNumber("Encoder Target",0);
@@ -205,7 +211,13 @@ public:
 		autoMode = new SendableChooser();
 		autoMode->AddDefault("Auto Off", (void*)&AUTO_MODE_OFF);
 		autoMode->AddObject("Full Auto", (void*)&AUTO_MODE_FULL);
-		autoMode->AddObject("Breach Only (TESTING)",(void*)&AUTO_MODE_BREACHTEST);
+		autoMode->AddObject("[TEST]Breach",(void*)&AUTO_MODE_BREACHTEST);
+		autoMode->AddObject("[TEST]Approach",(void*)&AUTO_MODE_APROACHTEST);
+		autoMode->AddObject("[TEST]Clear",(void*)&AUTO_MODE_CLEARTEST);
+		autoMode->AddObject("[TEST]Rotate",(void*)&AUTO_MODE_ROTATETEST);
+		autoMode->AddObject("[TEST]Vision",(void*)&AUTO_MODE_VISIONTEST);
+		autoMode->AddObject("[TEST]Fire",(void*)&AUTO_MODE_FIRETEST);
+
 		SmartDashboard::PutData("Auto Modes", autoMode);
 
 		toBreach = new SendableChooser();
@@ -321,6 +333,11 @@ public:
 			ahrs->ZeroYaw();
 		}
 
+		if(mainStick.GetRawButton(6))
+		{
+			angleMotor.SetEncPosition(0);
+		}
+
 		//------------------AUTOBREACH----------------------
 		//If button pressed, breach defType at selected position
 		if(mainStick.GetRawButton(BUT_BREACH2))
@@ -387,11 +404,11 @@ public:
 		//Change status of solenoid to push ball into wheels
 		if(specials.GetRawButton(BUT_FIRE))
 		{
-			shootyStick.Set(shootyStick.kReverse);
+			shootyStick.Set(shootyStick.kForward);
 		}
 		else
 		{
-			shootyStick.Set(shootyStick.kForward);
+			shootyStick.Set(shootyStick.kReverse);
 		}
 
 		//Shooter angle
@@ -429,7 +446,7 @@ public:
 		angleMotor.Set(0);
 
 		//Reset pneumatics (remove if needed)
-		shootyStick.Set(shootyStick.kForward);
+		shootyStick.Set(shootyStick.kReverse);
 		goingUp.Set(goingUp.kReverse);
 		shifter.Set(shifter.kReverse);
 	}
@@ -438,6 +455,8 @@ public:
 	 * 							Autonomous
 	 * ----------------------------------------------------------------------
 	 */
+
+	//----------------Initialization----------------
 	void AutonomousInit()
 	{
 		//Auto state determines where we are in sequence, start at 0
@@ -469,22 +488,19 @@ public:
 
 	}
 
+
+
+	//-------------------Switchers-------------------------
 	void AutonomousPeriodic()
 	{
-		if(autoSelected=="Full")
+		if(autoSelected==AUTO_MODE_FULL)
 		{
-			//Do everything (Drive up, breach, move, shoot
-
+			//--------------------------Full Auto--------------------------
 			//Switch case based on current autoState
 			switch(autoState)
 			{
 			case 0: {
-				//Move forward 1.12 meters
-				//if(!NavigateTo(0,1.12)) return;
-				//TODO Write with wait statements
-				drive.ArcadeDrive(1.0,0);
-				Wait(1);
-				drive.ArcadeDrive(0.0,0);
+				AutonomousApproach();
 				autoState++;
 				break;
 			}
@@ -498,46 +514,21 @@ public:
 			case 2:
 			{
 				//Drive to position on arc around tower
-				//if(!NavigateTo(0,1.5)) return;
 				//TODO Write with wait statements
-				drive.ArcadeDrive(1.0,0);
-				Wait(1);
-				drive.ArcadeDrive(0.0,0);
+				AutonomousClearDefense();
+				autoState++;
 				break;
 			}
 			case 3:
 			{
-				//Rotate to face tower TODO Calculate angles to face tower
-				//Approx -30, -10, 20, 40
-				switch(breachPos)
-				{
-				case 0:
-				{
-					if(!RotateToAngle(40)) return;
-				}
-				case 1:
-				{
-					if(!RotateToAngle(20)) return;
-				}
-				case 2:
-				{
-					if(!RotateToAngle(-10)) return;
-				}
-				case 3:
-				{
-					if(!RotateToAngle(-30)) return;
-				}
-				}
+				if(!AutonomousPerRotateToAngle()) break;
 				autoState++;
 				break;
 			}
 			case 4:
 			{
-				//Initial firing sequence
-				//Raise angle up
-				//TODO Figure out angle
-				ShooterToAngle(500);
-
+				AutonomousRaise();
+				autoState++;
 				break;
 			}
 			case 5:
@@ -550,31 +541,21 @@ public:
 			case 6:
 			{
 				//Fire
-				shooterA.Set(1);
-				shooterB.Set(1);
-				//Let motors spin up
-				Wait(1);
-
-				//Fire
-				shootyStick.Set(shootyStick.kForward);
-				Wait(1);
+				AutonomousFire();
 				autoState++;
-
 				break;
 			}
 			case 7:
 			{
 				//done
-				drive.ArcadeDrive(0.0,0);
-				shooterA.Set(0);
-				shooterB.Set(0);
-				shootyStick.Set(shootyStick.kReverse);
-				//shootyMotor.Set(0);
+				DisabledPeriodic();
 				break;
 			}
 			}
 		}
-		else if(autoSelected=="Breach")
+
+		//-------------------Testing Functions------------------------
+		else if(autoSelected==AUTO_MODE_BREACHTEST)
 		{
 			//Breach only
 			switch(autoState)
@@ -590,16 +571,103 @@ public:
 			}
 			}
 		}
+		else if(autoSelected==AUTO_MODE_APROACHTEST)
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				AutonomousApproach();
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
+			}
+		}
+		else if(autoSelected==AUTO_MODE_CLEARTEST)
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				AutonomousClearDefense();
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
+			}
+		}
+		else if(autoSelected==AUTO_MODE_ROTATETEST)
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				if(!AutonomousPerRotateToAngle()) break;
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
+			}
+		}
+		else if(autoSelected==AUTO_MODE_VISIONTEST)
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				if(!AutoAim()) break;
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
+			}
+		}
+		else if(autoSelected==AUTO_MODE_FIRETEST)
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				AutonomousFire();
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
+			}
+		}
+		else if(autoSelected==AUTO_MODE_RAISETEST)
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				AutonomousRaise();
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+			}
+			}
+		}
 	}
-
-
-
-
-
-	/*------------------------------------------------------------------------
-	 *                        BREACHING        TODO Write breach protocols
-	 * -----------------------------------------------------------------------
-	 */
 
 	//Switcher: call to activate breach type
 	//Calls the appropriate function for breaching a given position
@@ -632,8 +700,77 @@ public:
 	}
 
 
-	//Functions to breach each type, excluding lowbar
+	//---------------------Auto Functions (like Commands)---------------
 
+	void AutonomousApproach()
+	{
+		drive.ArcadeDrive(1.0,0);
+		Wait(1);
+		drive.ArcadeDrive(0.0,0);
+	}
+
+	void AutonomousClearDefense()
+	{
+		drive.ArcadeDrive(1.0,0);
+		Wait(1);
+		drive.ArcadeDrive(0.0,0);
+	}
+
+	bool AutonomousPerRotateToAngle()
+	{
+		//Rotate to face tower TODO Calculate angles to face tower
+		//Approx -30, -10, 20, 40
+		switch(breachPos)
+		{
+		case 0:
+		{
+			if(!RotateToAngle(40)) return false;
+			break;
+		}
+		case 1:
+		{
+			if(!RotateToAngle(20)) return false;
+			break;
+		}
+		case 2:
+		{
+			if(!RotateToAngle(-10)) return false;
+			break;
+		}
+		case 3:
+		{
+			if(!RotateToAngle(-30)) return false;
+			break;
+		}
+		}
+		return true;
+	}
+
+	void AutonomousRaise()
+	{
+		//Initial firing sequence
+		//Raise angle up
+		//TODO Figure out angle
+		ShooterToAngle(500);
+	}
+
+
+	void AutonomousFire()
+	{
+		shooterA.Set(0.25);
+		shooterB.Set(0.25);
+		//Let motors spin up
+		Wait(1);
+
+		//Fire
+		shootyStick.Set(shootyStick.kForward);
+		Wait(1);
+		shootyStick.Set(shootyStick.kReverse);
+		shooterA.Set(0);
+		shooterB.Set(0);
+	}
+
+	//---------------------Breach Functions------------------------------
 	void BreachPortcullis()
 	{
 		DriverStation::ReportError("Breaching Portcullis");
@@ -757,7 +894,6 @@ public:
 					//Increase angle
 					angleMotor.Set(0.3);
 				}
-
 			}
 			else
 			{

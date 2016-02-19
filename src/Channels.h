@@ -10,11 +10,12 @@
 const static int CH_LEFTDRIVE = 1;
 const static int CH_RIGHTDRIVE = 2;
 
-const static int CH_SHOOTERA = 0;
-const static int CH_SHOOTERB = 1;
+const static int CH_SHOOTERA = 1;
+const static int CH_SHOOTERB = 0;
 
 const static int CH_ANGLEMOTOR = 2;
 
+const static int CH_LIFTMOTOR = 3;
 //-------------------LIMIT SWITCHES------------
 const static int CH_SHOOTER_ANGLE_BOTTOM = 0;
 const static int CH_SHOOTER_ANGLE_TOP = 1;
@@ -61,7 +62,6 @@ const static int BUT_BREACH5 = 8;
 const static int BUT_FIRE = 1;
 const static int BUT_REVUP = 3;
 const static int BUT_SUCKIN = 2;
-//TODO Is angle on buttons or joystick?
 const static int BUT_AUTOAIMA = 4;
 const static int BUT_AUTOAIMB = 5;
 
