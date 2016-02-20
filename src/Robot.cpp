@@ -80,6 +80,8 @@ public:
 	CANTalon shooterB;
 	CANTalon angleMotor;
 
+	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1;
+
 	//----------------------SENSORS---------------------
 
 	//NavX Communication
@@ -302,6 +304,9 @@ public:
 		//end=start;
 		//SmartDashboard::PutNumber("Periodic:",elapsed_seconds.count());
 
+		SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
+		SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
+
 		//---------------AUTOAIM-------------------
 		if(specials.GetRawButton(BUT_AUTOAIMA))
 		{
@@ -316,7 +321,6 @@ public:
 		}
 
 		//---------------------Debug outs & testing functions, disable for comp-------------
-		SmartDashboard::PutNumber("Angle:",ahrs->GetYaw());
 		SmartDashboard::PutNumber("Encoder Val:",angleMotor.GetEncPosition());
 
 		if(mainStick.GetRawButton(3))
@@ -411,15 +415,16 @@ public:
 			shootyStick.Set(shootyStick.kReverse);
 		}
 
-		//Shooter angle
+		//Change shooter angle
 		double specialsY= specials.GetY();
+		//Move encoder to target TODO Remove when done
 		if(mainStick.GetRawButton(5))
 		{
 			ShooterToAngle(SmartDashboard::GetNumber("Encoder Target",0));
 		}
 		if(!angleBottom.Get() && specialsY<0) specialsY=0;
 		if(!angleTop.Get() && specialsY>0) specialsY=0;
-		angleMotor.Set(specialsY);
+		ShooterAngleToSpeed(specialsY);
 
 
 		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
@@ -872,7 +877,7 @@ public:
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
 			drive.ArcadeDrive(0.0,0.0);
-			angleMotor.Set(0);
+			ShooterAngleToSpeed(0);
 			return true;  //true=proceed to next action
 		}
 		else
@@ -887,12 +892,12 @@ public:
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Decrease angle
-					angleMotor.Set(-0.3);
+					ShooterAngleToSpeed(-0.3);
 				}
 				else
 				{
 					//Increase angle
-					angleMotor.Set(0.3);
+					ShooterAngleToSpeed(0.3);
 				}
 			}
 			else
@@ -1081,22 +1086,34 @@ public:
 	{
 		if(target<angleMotor.GetEncPosition())
 		{
-			angleMotor.Set(-0.5);
+			ShooterAngleToSpeed(-0.5);
 			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && IsEnabled()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
-			angleMotor.Set(0.5);
+			ShooterAngleToSpeed(0.5);
 			while(target>angleMotor.GetEncPosition() && angleTop.Get() && IsEnabled()){};
 		}
 	}
 
 	void ZeroShooter()
 	{
-		angleMotor.Set(-0.5);
+		ShooterAngleToSpeed(-0.5);
 		while(!angleBottom.Get() && IsEnabled() && IsAutonomous()){}
-		angleMotor.Set(0);
+		ShooterAngleToSpeed(0);
 		angleMotor.SetEncPosition(0);
+	}
+
+	void ShooterAngleToSpeed(double percent)
+	{
+		if(abs(percent)<SHOOTER_ANGLE_HOLD_PERCENT)
+		{
+			angleMotor.Set(SHOOTER_ANGLE_HOLD_PERCENT);
+		}
+		else
+		{
+			angleMotor.Set(percent);
+		}
 	}
 
 };
