@@ -43,7 +43,8 @@ const static int CH_SHOOTSTICK_PCM = CH_PCMA;
 const static int CH_SHOOTSTICK_FW = 6;
 const static int CH_SHOOTSTICK_RV = 7;
 
-
+const static int CH_ARMMAIN = 4;
+const static int CH_ARMSECONDARY = 2;
 
 /* ----------------------------------------------------------------
  *                          Buttons
@@ -65,5 +66,9 @@ const static int BUT_SUCKIN = 2;
 const static int BUT_AUTOAIMA = 4;
 const static int BUT_AUTOAIMB = 5;
 
+const static int BUT_ARMMAIN_FW = 6;
+const static int BUT_ARMMAIN_RV = 7;
+const static int BUT_ARMSEC_FW = 11;
+const static int BUT_ARMSEC_RV = 10;
 
 #endif

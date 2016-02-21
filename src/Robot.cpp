@@ -79,8 +79,11 @@ public:
 	CANTalon shooterA;
 	CANTalon shooterB;
 	CANTalon angleMotor;
-
+	//One rotation: 9124
 	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1;
+
+	CANTalon armMain;
+	Victor armSecondary;
 
 	//----------------------SENSORS---------------------
 
@@ -157,6 +160,8 @@ public:
 		shooterA(CH_SHOOTERA),
 		shooterB(CH_SHOOTERB),
 		angleMotor(CH_ANGLEMOTOR),
+		armMain(CH_ARMMAIN),
+		armSecondary(CH_ARMSECONDARY),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
@@ -176,7 +181,6 @@ public:
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
 		angleMotor.SetInverted(true);
-		//angleMotor.SetSensorDirection(false);
 		//angleMotor.SetControlMode(angleMotor.kPosition);
 		//angleMotor.ConfigEncoderCodesPerRev(1475);
 		//angleMotor.SetCloseLoopRampRate(0.25);
@@ -191,6 +195,9 @@ public:
 		right.SetSafetyEnabled(false);
 
 		angleMotor.SetEncPosition(0);
+
+		armMain.SetSafetyEnabled(false);
+		armSecondary.SetSafetyEnabled(false);
 
 		SmartDashboard::PutNumber("Angle Target:",0);
 
@@ -278,7 +285,6 @@ public:
 
 		IMAQdxStartAcquisition(session);
 
-
 		SmartDashboard::PutNumber("Tote hue min", RING_HUE_RANGE.minValue);
 		SmartDashboard::PutNumber("Tote hue max", RING_HUE_RANGE.maxValue);
 		SmartDashboard::PutNumber("Tote sat min", RING_SAT_RANGE.minValue);
@@ -316,7 +322,7 @@ public:
 		//This is for mask tuning only
 		if(specials.GetRawButton(BUT_AUTOAIMB))
 		{
-			VisionStuff();
+			CalibrateVision();
 			return;
 		}
 
@@ -424,8 +430,36 @@ public:
 		}
 		if(!angleBottom.Get() && specialsY<0) specialsY=0;
 		if(!angleTop.Get() && specialsY>0) specialsY=0;
+		SmartDashboard::PutNumber("Specials Y",specialsY);
 		ShooterAngleToSpeed(specialsY);
 
+
+		//--------------------Arm---------------------------
+		if(specials.GetRawButton(BUT_ARMMAIN_FW))
+		{
+			armMain.Set(1);
+		}
+		else if(specials.GetRawButton(BUT_ARMMAIN_RV))
+		{
+			armMain.Set(-1);
+		}
+		else
+		{
+			armMain.Set(0);
+		}
+
+		if(specials.GetRawButton(BUT_ARMSEC_FW))
+		{
+			armSecondary.SetSpeed(1);
+		}
+		else if(specials.GetRawButton(BUT_ARMSEC_RV))
+		{
+			armSecondary.SetSpeed(-1);
+		}
+		else
+		{
+			armSecondary.SetSpeed(0);
+		}
 
 		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
 		//SmartDashboard::PutNumber("Code Time:",elapsed_seconds1.count());
@@ -474,6 +508,7 @@ public:
 
 		//Get position we are lined up with
 		std::string pos = *((std::string*)toBreach->GetSelected());
+		if(pos==BREACH_POS_LB) breachPos=-1;
 		if(pos==BREACH_POS_0) breachPos=0;
 		if(pos==BREACH_POS_1) breachPos=1;
 		if(pos==BREACH_POS_2) breachPos=2;
@@ -505,34 +540,32 @@ public:
 			switch(autoState)
 			{
 			case 0: {
+				AutonomousRaise();
+				autoState++;
+				break;
+			}
+			case 1:
+			{
 				AutonomousApproach();
 				autoState++;
 				break;
 			}
-			case 1: {
+			case 2: {
 
 				//Breach functions are timed, run once only
 				Breach(breachPos);
 				autoState++;
 				break;
 			}
-			case 2:
-			{
-				//Drive to position on arc around tower
-				//TODO Write with wait statements
-				AutonomousClearDefense();
-				autoState++;
-				break;
-			}
 			case 3:
 			{
-				if(!AutonomousPerRotateToAngle()) break;
+				AutonomousClearDefense();
 				autoState++;
 				break;
 			}
 			case 4:
 			{
-				AutonomousRaise();
+				if(!AutonomousPerRotateToAngle()) break;
 				autoState++;
 				break;
 			}
@@ -678,6 +711,10 @@ public:
 	//Calls the appropriate function for breaching a given position
 	void Breach(int toBreachPos)
 	{
+		if(toBreachPos==-1)
+		{
+			BreachLowBar();
+		}
 		if(defense[toBreachPos]==AUTO_DEFTYPE_PORT){
 			BreachPortcullis();
 		}
@@ -756,14 +793,13 @@ public:
 		//Initial firing sequence
 		//Raise angle up
 		//TODO Figure out angle
-		ShooterToAngle(500);
+		ShooterToAngle(800);
 	}
-
 
 	void AutonomousFire()
 	{
-		shooterA.Set(0.25);
-		shooterB.Set(0.25);
+		shooterA.Set(1);
+		shooterB.Set(1);
 		//Let motors spin up
 		Wait(1);
 
@@ -820,6 +856,10 @@ public:
 		//Just drive?
 	}
 
+	void BreachLowBar()
+	{
+		DriverStation::ReportError("Breaching Low Bar");
+	}
 	/*----------------------------------------------------------------------
 	 * 							NavX-MXP Navigation
 	 * ---------------------------------------------------------------------
@@ -871,7 +911,7 @@ public:
 	bool AutoAim()
 	{
 		//Process image, storing origin in screenPosX and screenPosY
-		VisionStuffFaster();
+		Vision();
 
 		//Check if target is in correct spot (within tolerance) already
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
@@ -939,7 +979,7 @@ public:
 	}
 
 
-	void VisionStuff()//For tuning vision constants only
+	void CalibrateVision()//For tuning vision constants only
 	{
 		RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("Tote hue min", RING_HUE_RANGE.minValue);
 		RING_HUE_RANGE.maxValue = SmartDashboard::GetNumber("Tote hue max", RING_HUE_RANGE.maxValue);
@@ -1009,7 +1049,7 @@ public:
 		}
 	}
 
-	void VisionStuffFaster()
+	void Vision()
 	{
 		//Retrieve an image from session, store into frame
 		IMAQdxGrab(session, frame, true, NULL);
@@ -1086,27 +1126,28 @@ public:
 	{
 		if(target<angleMotor.GetEncPosition())
 		{
-			ShooterAngleToSpeed(-0.5);
+			ShooterAngleToSpeed(0.5);
 			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && IsEnabled()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
-			ShooterAngleToSpeed(0.5);
+			ShooterAngleToSpeed(-0.5);
 			while(target>angleMotor.GetEncPosition() && angleTop.Get() && IsEnabled()){};
 		}
 	}
 
 	void ZeroShooter()
 	{
-		ShooterAngleToSpeed(-0.5);
-		while(!angleBottom.Get() && IsEnabled() && IsAutonomous()){}
+		ShooterAngleToSpeed(0.5);
+		while(angleBottom.Get() && IsEnabled() && IsAutonomous()){}
 		ShooterAngleToSpeed(0);
 		angleMotor.SetEncPosition(0);
 	}
 
 	void ShooterAngleToSpeed(double percent)
 	{
-		if(abs(percent)<SHOOTER_ANGLE_HOLD_PERCENT)
+		SmartDashboard::PutNumber("Percent",abs(percent*100)/100.0);
+		if(abs(percent*100)/100.0<SHOOTER_ANGLE_HOLD_PERCENT)
 		{
 			angleMotor.Set(SHOOTER_ANGLE_HOLD_PERCENT);
 		}
