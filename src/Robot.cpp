@@ -44,6 +44,18 @@ public:
 	const std::string AUTO_DEFTYPE_RW = "RockWall";
 
 
+	//-------------------AUTO MODE-----------------
+	//Auto Modes
+	SendableChooser *autoMode;
+	SendableChooser *def[4];
+	SendableChooser *toBreach;
+
+	std::string autoSelected;
+	std::string defense[4];
+	int breachPos;
+
+	int autoState;
+
 
 	//---------------------------NAVX CONSTANTS--------------------
 	double ANGLE_TOLERANCE = 2;   //Degrees
@@ -60,21 +72,12 @@ public:
 	float AREA_MINIMUM = 0.5; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
-	//Auto Modes
-	SendableChooser *autoMode;
-	SendableChooser *def[4];
-	SendableChooser *toBreach;
-
-	std::string autoSelected;
-	std::string defense[4];
-	int breachPos;
-
-	int autoState;
-
 
 	//-----------------------MOTORS-------------------------
 	Victor left, right;
 	RobotDrive drive;
+
+	const double INCHES_PER_SEC = 67;
 
 	CANTalon shooterA;
 	CANTalon shooterB;
@@ -128,6 +131,8 @@ public:
 	double screenPosX;
 	double screenPosY;
 
+	const int CYCLES_PER_FRAME = 5;
+
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
 
@@ -136,8 +141,8 @@ public:
 	//Shifter
 	DoubleSolenoid shifter;
 
-	//Hanging
-	DoubleSolenoid goingUp;
+	//Forks
+	DoubleSolenoid fork;
 
 	//Thing that pushes balls into wheels
 	DoubleSolenoid shootyStick;
@@ -147,6 +152,9 @@ public:
 	//--------------------------LIMIT SWITCHES--------------------------
 	LimitSwitch angleBottom;
 	LimitSwitch angleTop;
+
+	//--------------------------OTHER-----------------------------
+	int cycle;
 
 	/*--------------------------------------------------------------
 	 *						Initialization
@@ -166,7 +174,7 @@ public:
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
 		shifter(CH_SHIFTER_PCM,CH_SHIFTER_FW,CH_SHIFTER_RV),
-		goingUp(CH_HANG_PCM,CH_HANG_FW,CH_HANG_RV),
+		fork(CH_FORKA_PCM,CH_FORK_FW,CH_FORK_RV),
 		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
 		compressor(CH_PCMA),
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
@@ -193,6 +201,8 @@ public:
 		drive.SetSafetyEnabled(false);
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
+
+		cycle=0;
 
 		angleMotor.SetEncPosition(0);
 
@@ -304,6 +314,7 @@ public:
 
 	void TeleopPeriodic()
 	{
+		cycle++;
 
 		//start = std::chrono::system_clock::now();
 		//std::chrono::duration<double> elapsed_seconds = start-end;
@@ -373,9 +384,14 @@ public:
 
 
 		//------------------CAMERA FEED---------------------
-		IMAQdxGrab(session, frame, true, NULL);
-		imaqDrawShapeOnImage(frame, frame, { TARGET_ORIGIN_X, TARGET_ORIGIN_Y,ORIGIN_X_TOL,ORIGIN_Y_TOL}, DrawMode::IMAQ_DRAW_VALUE, ShapeMode::IMAQ_SHAPE_RECT, 0.0f);
-		CameraServer::GetInstance()->SetImage(frame);
+		if(cycle>CYCLES_PER_FRAME)
+		{
+			cycle = 0;
+			IMAQdxGrab(session, frame, true, NULL);
+			imaqDrawShapeOnImage(frame, frame, { TARGET_ORIGIN_X, TARGET_ORIGIN_Y,ORIGIN_X_TOL,ORIGIN_Y_TOL}, DrawMode::IMAQ_DRAW_VALUE, ShapeMode::IMAQ_SHAPE_RECT, 0.0f);
+			CameraServer::GetInstance()->SetImage(frame);
+		}
+
 
 		//-----------------DRIVE SYSTEM---------------------
 		drive.ArcadeDrive(mainStick);
@@ -387,21 +403,21 @@ public:
 			shifter.Set(shifter.kReverse);
 
 		//-----------------HANGING-------------------------
-		if(mainStick.GetRawButton(BUT_HANG))
+		if(specials.GetRawButton(BUT_FORK))
 		{
-			goingUp.Set(goingUp.kForward);
+			fork.Set(fork.kForward);
 		}
 		else
 		{
-			goingUp.Set(goingUp.kReverse);
+			fork.Set(fork.kReverse);
 		}
 
 		//-------------------SHOOTER------------------
 
 		//Speed based on throttle lever, convert from -1<t<1 to 0<t<1
 		double speed = 0;
-		if(specials.GetRawButton(BUT_REVUP)) speed=1;
-		else if(specials.GetRawButton(BUT_SUCKIN)) speed=-1;
+		if(specials.GetRawButton(BUT_SHOOTER_OUT)) speed=1;
+		else if(specials.GetRawButton(BUT_SHOOTER_IN)) speed=-1;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
@@ -437,11 +453,11 @@ public:
 		//--------------------Arm---------------------------
 		if(specials.GetRawButton(BUT_ARMMAIN_FW))
 		{
-			armMain.Set(1);
+			armMain.Set(mult);
 		}
 		else if(specials.GetRawButton(BUT_ARMMAIN_RV))
 		{
-			armMain.Set(-1);
+			armMain.Set(-mult);
 		}
 		else
 		{
@@ -450,11 +466,11 @@ public:
 
 		if(specials.GetRawButton(BUT_ARMSEC_FW))
 		{
-			armSecondary.SetSpeed(1);
+			armSecondary.SetSpeed(mult);
 		}
 		else if(specials.GetRawButton(BUT_ARMSEC_RV))
 		{
-			armSecondary.SetSpeed(-1);
+			armSecondary.SetSpeed(-mult);
 		}
 		else
 		{
@@ -486,7 +502,7 @@ public:
 
 		//Reset pneumatics (remove if needed)
 		shootyStick.Set(shootyStick.kReverse);
-		goingUp.Set(goingUp.kReverse);
+		fork.Set(fork.kReverse);
 		shifter.Set(shifter.kReverse);
 	}
 
@@ -544,46 +560,40 @@ public:
 				autoState++;
 				break;
 			}
-			case 1:
-			{
-				AutonomousApproach();
-				autoState++;
-				break;
-			}
-			case 2: {
+			case 1: {
 
 				//Breach functions are timed, run once only
 				Breach(breachPos);
 				autoState++;
 				break;
 			}
-			case 3:
+			case 2:
 			{
-				AutonomousClearDefense();
+				//AutonomousClearDefense();
 				autoState++;
 				break;
 			}
-			case 4:
+			case 3:
 			{
 				if(!AutonomousPerRotateToAngle()) break;
 				autoState++;
 				break;
 			}
-			case 5:
+			case 4:
 			{
 				//Confirm & adjust using vision
 				if(!AutoAim()) break;
 				autoState++;
 				break;
 			}
-			case 6:
+			case 5:
 			{
 				//Fire
 				AutonomousFire();
 				autoState++;
 				break;
 			}
-			case 7:
+			case 6:
 			{
 				//done
 				DisabledPeriodic();
@@ -615,7 +625,7 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-				AutonomousApproach();
+				ApproachRampForward();
 				autoState++;
 				break;
 			}
@@ -744,13 +754,6 @@ public:
 
 	//---------------------Auto Functions (like Commands)---------------
 
-	void AutonomousApproach()
-	{
-		drive.ArcadeDrive(1.0,0);
-		Wait(1);
-		drive.ArcadeDrive(0.0,0);
-	}
-
 	void AutonomousClearDefense()
 	{
 		drive.ArcadeDrive(1.0,0);
@@ -764,6 +767,11 @@ public:
 		//Approx -30, -10, 20, 40
 		switch(breachPos)
 		{
+		case -1:
+		{
+			if(!RotateToAngle(50)) return false;
+			break;
+		}
 		case 0:
 		{
 			if(!RotateToAngle(40)) return false;
@@ -801,7 +809,7 @@ public:
 		shooterA.Set(1);
 		shooterB.Set(1);
 		//Let motors spin up
-		Wait(1);
+		Wait(1.5);
 
 		//Fire
 		shootyStick.Set(shootyStick.kForward);
@@ -815,67 +823,147 @@ public:
 	void BreachPortcullis()
 	{
 		DriverStation::ReportError("Breaching Portcullis");
+		//Turn around
+		ApproachRampReverse();
+		//Deploy arm TODO Figure out angle
+		ArmToAngle(1000);
+		//Back up
+		drive.ArcadeDrive(-1.0,0);
+		Wait(0.5);
+		drive.ArcadeDrive(0.,0);
+		//Lift arm
+		armMain.Set(-1);
+		//Forward
+		drive.ArcadeDrive(0.5,0);
+		Wait(0.1);
+		//Reverse
+		drive.ArcadeDrive(-1.,0);
+		Wait(1);
+		drive.ArcadeDrive(0.,0);
+		//Reset arm
+		ArmToAngle(0);
+		while(RotateToAngle(0)&&IsEnabled()){}
+
+
 	}
 
 	void BreachCheval()
 	{
 		DriverStation::ReportError("Breaching Cheval");
+		fork.Set(fork.kForward);
+		ApproachRampForward();
+		drive.ArcadeDrive(1.,0);
+		Wait(0.25);
+		drive.ArcadeDrive(0.,0);
+		ShooterToAngle(0);
+		drive.ArcadeDrive(0.3,0);
+		Wait(4);
+		drive.ArcadeDrive(0.,0);
 	}
 
 	void BreachMoat()
 	{
 		DriverStation::ReportError("Breaching Moat");
+		ApproachRampForward();
 		//Just drive?
+		drive.ArcadeDrive(1.,0);
+		Wait(4);
+		drive.ArcadeDrive(0.,0);
 	}
 
 	void BreachRamparts()
 	{
 		DriverStation::ReportError("Breaching Ramparts");
 		//Just drive?
+		ApproachRampForward();
+		drive.ArcadeDrive(1.,0);
+		Wait(4);
+		drive.ArcadeDrive(0.,0);
 	}
 
 	void BreachDrawbridge()
 	{
 		DriverStation::ReportError("Breaching Drawbridge");
+		ApproachRampReverse();
 	}
 
 	void BreachSally()
 	{
 		DriverStation::ReportError("Breaching Sally Port");
+		//Turn around
+		//Extend arm & secondary arm
+		ArmToAngle(300);
+		armSecondary.Set(1);
+		Wait(0.2);
+		armSecondary.Set(0);
+		ApproachRampReverse();
+		//Reverse
+		ArmToAngle(400);
+		//Pull door forward
+		drive.TankDrive(1,0.3);
+		Wait(1);
+		//Spin around and move quick
+		while(!RotateToAngle(90)){}
+		drive.TankDrive(0.3,1);
+		Wait(1);
+		drive.ArcadeDrive(1.,0);
+		Wait(1);
+		drive.ArcadeDrive(0.,0);
+		//Stow Arm
+		ArmToAngle(0);
+		armSecondary.Set(-1);
+		Wait(0.1);
+		armSecondary.Set(0);
 	}
 
 	void BreachRockWall()
 	{
 		DriverStation::ReportError("Breaching Rock Wall");
 		//Just drive?
+		ApproachRampForward();
+		drive.ArcadeDrive(1.,0);
+		Wait(4);
+		drive.ArcadeDrive(0.,0);
 	}
 
 	void BreachRoughTerrain()
 	{
 		DriverStation::ReportError("Breaching Rough Terrain");
 		//Just drive?
+		ApproachRampForward();
+		drive.ArcadeDrive(1.,0);
+		Wait(4);
+		drive.ArcadeDrive(0.,0);
 	}
 
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
+		ApproachRampReverse();
+		drive.ArcadeDrive(-1.,0);
+		Wait(3);
+		drive.ArcadeDrive(0.,0);
 	}
 	/*----------------------------------------------------------------------
 	 * 							NavX-MXP Navigation
 	 * ---------------------------------------------------------------------
 	 */
 
-	bool RotateToAngle(double targetAngle)
+	bool RotateToAngle(double targetAngle, double speed = 0.8)
 	{
 		//Called periodically, returns true if facing already
 
 		//Get angle from NavX
 		double currentAngle = ahrs->GetYaw();
 
+
 		//If at angle already, stop and return
 		//if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
-		if(abs(currentAngle-targetAngle)<ANGLE_TOLERANCE)
+		if(abs(currentAngle-targetAngle)<ANGLE_TOLERANCE ||
+				((targetAngle>180-ANGLE_TOLERANCE || targetAngle<-180+ANGLE_TOLERANCE) &&
+				(currentAngle>180-ANGLE_TOLERANCE || currentAngle<-180+ANGLE_TOLERANCE)))
 		{
+			//Extra logic is to deal with turning to +-180
 			return true;  //true=proceed to next action
 		}
 
@@ -883,16 +971,31 @@ public:
 		if(currentAngle>targetAngle)
 		{
 			//Turn left
-			drive.ArcadeDrive(0.0,0.5);
+			drive.ArcadeDrive(0.0,speed);
 		}
 		else
 		{
 			//Turn right
-			drive.ArcadeDrive(0.0,-0.5);
+			drive.ArcadeDrive(0.0,-speed);
 		}
 		return false;
 	}
 
+	void ApproachRampForward(double speed = 1)
+	{
+		while(!RotateToAngle(0) && IsEnabled()){}
+		drive.ArcadeDrive(speed,0);
+		while(ahrs->GetPitch()<13 && IsEnabled()){}
+		drive.ArcadeDrive(0.,0);
+	}
+
+	void ApproachRampReverse(double speed = 1)
+	{
+		while(!RotateToAngle(180) && IsEnabled()){}
+		drive.ArcadeDrive(-speed,0);
+		while(ahrs->GetPitch()>-13 && IsEnabled()){}
+		drive.ArcadeDrive(0.,0);
+	}
 
 
 
@@ -1143,7 +1246,6 @@ public:
 		ShooterAngleToSpeed(0);
 		angleMotor.SetEncPosition(0);
 	}
-
 	void ShooterAngleToSpeed(double percent)
 	{
 		SmartDashboard::PutNumber("Percent",abs(percent*100)/100.0);
@@ -1157,6 +1259,54 @@ public:
 		}
 	}
 
+
+	void ArmToAngle(int target)
+		{
+			if(target<armMain.GetEncPosition())
+			{
+				armMain.Set(1);
+				while(target<armMain.GetEncPosition() && IsEnabled()){};
+
+			}
+			else if(target>armMain.GetEncPosition())
+			{
+				armMain.Set(-1);
+				while(target>armMain.GetEncPosition() && IsEnabled()){};
+			}
+		}
+
+	void moveXIn(double x, double speed)
+	{
+		double inPerSec = INCHES_PER_SEC*speed;
+		if(x>0)
+		{
+			double timeToWait = 1/inPerSec*x;
+			drive.ArcadeDrive(speed,0);
+			Wait(timeToWait);
+			drive.ArcadeDrive(0.,0);
+		}
+		else
+		{
+			double timeToWait = 1/inPerSec*x*-1;
+			drive.ArcadeDrive(-speed,0);
+			Wait(timeToWait);
+			drive.ArcadeDrive(0.,0);
+		}
+	}
+
+	//---------------MEASUREMENTS------------------
+	//Defences are 47.34 accross on floor, 48 in total distance over
+	/*
+	 *     |                   |           |                                 |
+	 *     |                   |           |                                 |
+	 *     |                   |           |                                 |
+	 *  AutoLine     74.27   Def: 47.34 floor,         191.5                Wall
+	 *                         48 to go over
+	 *                   TOTAL: 313.11
+	 *
+	 *					Robot moves 67 in/sec approx
+	 *
+	 */
 };
 
 START_ROBOT_CLASS(Robot)
