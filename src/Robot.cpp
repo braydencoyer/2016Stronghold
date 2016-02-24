@@ -61,8 +61,8 @@ public:
 	double ANGLE_TOLERANCE = 2;   //Degrees
 
 	//--------------------------VISION CONSTANTS-------------------
-	int TARGET_ORIGIN_X = 250;
-	int TARGET_ORIGIN_Y = 250;
+	int TARGET_ORIGIN_X = 287;
+	int TARGET_ORIGIN_Y = 396;
 	int ORIGIN_X_TOL = 10;
 	int ORIGIN_Y_TOL = 10;
 
@@ -156,6 +156,8 @@ public:
 	//--------------------------OTHER-----------------------------
 	int cycle;
 
+	Encoder leftEnc,rightEnc;
+
 	/*--------------------------------------------------------------
 	 *						Initialization
 	 * -------------------------------------------------------------
@@ -178,7 +180,9 @@ public:
 		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
 		compressor(CH_PCMA),
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
-		angleTop(CH_SHOOTER_ANGLE_TOP,true)
+		angleTop(CH_SHOOTER_ANGLE_TOP,true),
+		leftEnc(CH_ENC_L_A,CH_ENC_L_B),
+		rightEnc(CH_ENC_R_A,CH_ENC_R_B)
 	{
 
 		//--------Motor inversion----------------
@@ -186,6 +190,10 @@ public:
 		shooterB.SetInverted(false);
 		shooterA.SetInverted(true);
 		//shooterB.Set(10);
+
+
+		drive.SetInvertedMotor(drive.kRearLeftMotor,false);
+		drive.SetInvertedMotor(drive.kRearRightMotor,false);
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
 		angleMotor.SetInverted(true);
@@ -301,6 +309,16 @@ public:
 		SmartDashboard::PutNumber("Tote sat max", RING_SAT_RANGE.maxValue);
 		SmartDashboard::PutNumber("Tote val min", RING_VAL_RANGE.minValue);
 		SmartDashboard::PutNumber("Tote val max", RING_VAL_RANGE.maxValue);
+		SmartDashboard::PutNumber("X To Target", TARGET_ORIGIN_X);
+		SmartDashboard::PutNumber("Y To Target", TARGET_ORIGIN_Y);
+		SmartDashboard::PutNumber("X Tol", ORIGIN_X_TOL);
+		SmartDashboard::PutNumber("Y Tol", ORIGIN_Y_TOL);
+
+
+		//-------------Encoders--------------
+		angleMotor.SetEncPosition(0);
+		leftEnc.Reset();
+		rightEnc.Reset();
 	}
 	/* ------------------------------------------------------------------------
 	 * 									Teleop
@@ -321,8 +339,15 @@ public:
 		//end=start;
 		//SmartDashboard::PutNumber("Periodic:",elapsed_seconds.count());
 
-		SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
-		SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
+		//SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
+		//SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
+
+		//SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
+		//SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
+		//SmartDashboard::PutNumber("Roll",ahrs->GetRoll());
+
+		//SmartDashboard::PutNumber("Left Encoder",leftEnc.Get());
+		//SmartDashboard::PutNumber("Right Encoder",rightEnc.Get());
 
 		//---------------AUTOAIM-------------------
 		if(specials.GetRawButton(BUT_AUTOAIMA))
@@ -340,7 +365,7 @@ public:
 		//---------------------Debug outs & testing functions, disable for comp-------------
 		SmartDashboard::PutNumber("Encoder Val:",angleMotor.GetEncPosition());
 
-		if(mainStick.GetRawButton(3))
+		/*if(mainStick.GetRawButton(3))
 		{
 			double tA = SmartDashboard::GetNumber("Angle Target:",0);
 
@@ -348,15 +373,17 @@ public:
 			return;
 		}
 
+*/
 		if(mainStick.GetRawButton(4))
 		{
 			ahrs->ResetDisplacement();
 			ahrs->ZeroYaw();
 		}
-
 		if(mainStick.GetRawButton(6))
 		{
 			angleMotor.SetEncPosition(0);
+			leftEnc.Reset();
+			rightEnc.Reset();
 		}
 
 		//------------------AUTOBREACH----------------------
@@ -388,19 +415,23 @@ public:
 		{
 			cycle = 0;
 			IMAQdxGrab(session, frame, true, NULL);
-			imaqDrawShapeOnImage(frame, frame, { TARGET_ORIGIN_X, TARGET_ORIGIN_Y,ORIGIN_X_TOL,ORIGIN_Y_TOL}, DrawMode::IMAQ_DRAW_VALUE, ShapeMode::IMAQ_SHAPE_RECT, 0.0f);
+			imaqDrawShapeOnImage(frame, frame, { TARGET_ORIGIN_X-ORIGIN_X_TOL, TARGET_ORIGIN_Y-ORIGIN_Y_TOL,ORIGIN_X_TOL*2,ORIGIN_Y_TOL*2}, DrawMode::IMAQ_DRAW_VALUE, ShapeMode::IMAQ_SHAPE_RECT, 0.0f);
 			CameraServer::GetInstance()->SetImage(frame);
 		}
 
 
 		//-----------------DRIVE SYSTEM---------------------
-		drive.ArcadeDrive(mainStick);
+		drive.ArcadeDrive(-mainStick.GetY(),mainStick.GetX());
 
 		//-----------------SHIFTER--------------------------
 		if(mainStick.GetRawButton(BUT_SHIFTER))
+		{
 			shifter.Set(shifter.kForward);
+		}
 		else
+		{
 			shifter.Set(shifter.kReverse);
+		}
 
 		//-----------------HANGING-------------------------
 		if(specials.GetRawButton(BUT_FORK))
@@ -536,7 +567,7 @@ public:
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
 
-		ZeroShooter();
+		//ZeroShooter();
 
 		//Reset NavX in case it drifted while stationary
 		ahrs->ResetDisplacement();
@@ -769,17 +800,17 @@ public:
 		{
 		case -1:
 		{
-			if(!RotateToAngle(50)) return false;
+			if(!RotateToAngle(40)) return false;
 			break;
 		}
 		case 0:
 		{
-			if(!RotateToAngle(40)) return false;
+			if(!RotateToAngle(30)) return false;
 			break;
 		}
 		case 1:
 		{
-			if(!RotateToAngle(20)) return false;
+			if(!RotateToAngle(10)) return false;
 			break;
 		}
 		case 2:
@@ -789,7 +820,7 @@ public:
 		}
 		case 3:
 		{
-			if(!RotateToAngle(-30)) return false;
+			if(!RotateToAngle(-20)) return false;
 			break;
 		}
 		}
@@ -801,7 +832,7 @@ public:
 		//Initial firing sequence
 		//Raise angle up
 		//TODO Figure out angle
-		ShooterToAngle(800);
+		ShooterToAngle(500);
 	}
 
 	void AutonomousFire()
@@ -866,8 +897,8 @@ public:
 		DriverStation::ReportError("Breaching Moat");
 		ApproachRampForward();
 		//Just drive?
-		drive.ArcadeDrive(1.,0);
-		Wait(4);
+		drive.ArcadeDrive(0.75,0);
+		Wait(1.5);
 		drive.ArcadeDrive(0.,0);
 	}
 
@@ -877,7 +908,7 @@ public:
 		//Just drive?
 		ApproachRampForward();
 		drive.ArcadeDrive(1.,0);
-		Wait(4);
+		Wait(1.5);
 		drive.ArcadeDrive(0.,0);
 	}
 
@@ -932,16 +963,16 @@ public:
 		//Just drive?
 		ApproachRampForward();
 		drive.ArcadeDrive(1.,0);
-		Wait(4);
+		Wait(1.5);
 		drive.ArcadeDrive(0.,0);
 	}
 
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
-		ApproachRampReverse();
-		drive.ArcadeDrive(-1.,0);
-		Wait(3);
+		ApproachRampForward();
+		drive.ArcadeDrive(-0.25,0);
+		Wait(4);
 		drive.ArcadeDrive(0.,0);
 	}
 	/*----------------------------------------------------------------------
@@ -949,13 +980,12 @@ public:
 	 * ---------------------------------------------------------------------
 	 */
 
-	bool RotateToAngle(double targetAngle, double speed = 0.8)
+	bool RotateToAngle(double targetAngle, double speed = 0.5)
 	{
 		//Called periodically, returns true if facing already
 
 		//Get angle from NavX
 		double currentAngle = ahrs->GetYaw();
-
 
 		//If at angle already, stop and return
 		//if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
@@ -964,6 +994,7 @@ public:
 				(currentAngle>180-ANGLE_TOLERANCE || currentAngle<-180+ANGLE_TOLERANCE)))
 		{
 			//Extra logic is to deal with turning to +-180
+			drive.ArcadeDrive(0.,0);
 			return true;  //true=proceed to next action
 		}
 
@@ -971,12 +1002,12 @@ public:
 		if(currentAngle>targetAngle)
 		{
 			//Turn left
-			drive.ArcadeDrive(0.0,speed);
+			drive.ArcadeDrive(0.0,-speed);
 		}
 		else
 		{
 			//Turn right
-			drive.ArcadeDrive(0.0,-speed);
+			drive.ArcadeDrive(0.0,speed);
 		}
 		return false;
 	}
@@ -985,7 +1016,7 @@ public:
 	{
 		while(!RotateToAngle(0) && IsEnabled()){}
 		drive.ArcadeDrive(speed,0);
-		while(ahrs->GetPitch()<13 && IsEnabled()){}
+		while(ahrs->GetRoll()<10 && IsEnabled()){}
 		drive.ArcadeDrive(0.,0);
 	}
 
@@ -993,7 +1024,7 @@ public:
 	{
 		while(!RotateToAngle(180) && IsEnabled()){}
 		drive.ArcadeDrive(-speed,0);
-		while(ahrs->GetPitch()>-13 && IsEnabled()){}
+		while(ahrs->GetRoll()>-10 && IsEnabled()){}
 		drive.ArcadeDrive(0.,0);
 	}
 
@@ -1035,12 +1066,12 @@ public:
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Decrease angle
-					ShooterAngleToSpeed(-0.3);
+					ShooterAngleToSpeed(0.25);
 				}
 				else
 				{
 					//Increase angle
-					ShooterAngleToSpeed(0.3);
+					ShooterAngleToSpeed(-0.11);
 				}
 			}
 			else
@@ -1051,14 +1082,14 @@ public:
 					if(screenPosX>TARGET_ORIGIN_X)
 					{
 						//Turn right
-						drive.ArcadeDrive(0.0,-0.45);
+						drive.ArcadeDrive(0.0,0.45);
 						Wait(0.1);
 						drive.ArcadeDrive(0.0,0.0);
 					}
 					else
 					{
 						//Turn left
-						drive.ArcadeDrive(0.0,0.45);
+						drive.ArcadeDrive(0.0,-0.45);
 						Wait(0.1);
 						drive.ArcadeDrive(0.0,0.0);
 					}
@@ -1068,12 +1099,12 @@ public:
 					if(screenPosX>TARGET_ORIGIN_X)
 					{
 						//Turn right
-						drive.ArcadeDrive(0.0,-0.45);
+						drive.ArcadeDrive(0.0,0.45);
 					}
 					else
 					{
 						//Turn left
-						drive.ArcadeDrive(0.0,0.45);
+						drive.ArcadeDrive(0.0,-0.45);
 					}
 				}
 			}
@@ -1090,6 +1121,12 @@ public:
 		RING_SAT_RANGE.maxValue = SmartDashboard::GetNumber("Tote sat max", RING_SAT_RANGE.maxValue);
 		RING_VAL_RANGE.minValue = SmartDashboard::GetNumber("Tote val min", RING_VAL_RANGE.minValue);
 		RING_VAL_RANGE.maxValue = SmartDashboard::GetNumber("Tote val max", RING_VAL_RANGE.maxValue);
+
+		TARGET_ORIGIN_X = SmartDashboard::GetNumber("X To Target",TARGET_ORIGIN_X);
+		TARGET_ORIGIN_Y = SmartDashboard::GetNumber("Y To Target",TARGET_ORIGIN_Y);
+		ORIGIN_X_TOL = SmartDashboard::GetNumber("X Tol",ORIGIN_X_TOL);
+		ORIGIN_Y_TOL = SmartDashboard::GetNumber("Y Tol",ORIGIN_Y_TOL);
+
 
 		//Retrieve an image from session, store into frame
 		IMAQdxGrab(session, frame, true, NULL);
@@ -1192,8 +1229,8 @@ public:
 			screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
 			screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
 
-			SmartDashboard::PutNumber("Target X", screenPosX);
-			SmartDashboard::PutNumber("Target Y", screenPosY);
+			//SmartDashboard::PutNumber("Target X", screenPosX);
+			//SmartDashboard::PutNumber("Target Y", screenPosY);
 
 
 		} else {
@@ -1229,14 +1266,15 @@ public:
 	{
 		if(target<angleMotor.GetEncPosition())
 		{
-			ShooterAngleToSpeed(0.5);
+			ShooterAngleToSpeed(-0.5);
 			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && IsEnabled()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
-			ShooterAngleToSpeed(-0.5);
+			ShooterAngleToSpeed(0.5);
 			while(target>angleMotor.GetEncPosition() && angleTop.Get() && IsEnabled()){};
 		}
+		ShooterAngleToSpeed(0);
 	}
 
 	void ZeroShooter()
@@ -1275,24 +1313,24 @@ public:
 			}
 		}
 
-	void moveXIn(double x, double speed)
+	/*void moveXIn(double x, double speed)
 	{
 		double inPerSec = INCHES_PER_SEC*speed;
 		if(x>0)
 		{
 			double timeToWait = 1/inPerSec*x;
-			drive.ArcadeDrive(speed,0);
+			drive.ArcadeDrive(-speed,0);
 			Wait(timeToWait);
 			drive.ArcadeDrive(0.,0);
 		}
 		else
 		{
 			double timeToWait = 1/inPerSec*x*-1;
-			drive.ArcadeDrive(-speed,0);
+			drive.ArcadeDrive(speed,0);
 			Wait(timeToWait);
 			drive.ArcadeDrive(0.,0);
 		}
-	}
+	}*/
 
 	//---------------MEASUREMENTS------------------
 	//Defences are 47.34 accross on floor, 48 in total distance over

@@ -7,8 +7,8 @@
  */
 
 //-------------------MOTORS------------------
-const static int CH_LEFTDRIVE = 1;
-const static int CH_RIGHTDRIVE = 2;
+const static int CH_LEFTDRIVE = 2;
+const static int CH_RIGHTDRIVE = 1;
 
 const static int CH_SHOOTERA = 1;
 const static int CH_SHOOTERB = 0;
@@ -18,9 +18,14 @@ const static int CH_ANGLEMOTOR = 2;
 const static int CH_ARMMAIN = 3;
 const static int CH_ARMSECONDARY = 3;
 
-//-------------------LIMIT SWITCHES------------
+//-------------------LIMIT SWITCHES/SENSORS------------
 const static int CH_SHOOTER_ANGLE_BOTTOM = 0;
 const static int CH_SHOOTER_ANGLE_TOP = 1;
+
+const static int CH_ENC_L_A = 2;
+const static int CH_ENC_L_B = 3;
+const static int CH_ENC_R_A = 4;
+const static int CH_ENC_R_B = 5;
 
 //--------------------HUMAN INPUT--------------
 const static int CH_DRIVESTICK = 0;
