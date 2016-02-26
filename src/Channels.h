@@ -7,16 +7,19 @@
  */
 
 //-------------------MOTORS------------------
-const static int CH_LEFTDRIVE = 2;
-const static int CH_RIGHTDRIVE = 1;
+const static int CH_LEFTDRIVE = 2;//PWM *2
+const static int CH_RIGHTDRIVE = 1;//PWM *2
 
-const static int CH_SHOOTERA = 1;
-const static int CH_SHOOTERB = 0;
+const static int CH_SHOOTERA = 1;//CAN
+const static int CH_SHOOTERB = 0;//CAN
 
-const static int CH_ANGLEMOTOR = 2;
+const static int CH_ANGLEMOTOR = 2;//CAN
 
-const static int CH_ARMMAIN = 3;
-const static int CH_ARMSECONDARY = 3;
+const static int CH_ARMMAIN = 3;//CAN
+const static int CH_ARMSECONDARY = 3;//PWM
+
+const static int CH_HANGA = 4;//CAN?
+const static int CH_HANGB = 5;//CAN?
 
 //-------------------LIMIT SWITCHES/SENSORS------------
 const static int CH_SHOOTER_ANGLE_BOTTOM = 0;
