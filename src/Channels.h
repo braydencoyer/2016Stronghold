@@ -62,10 +62,10 @@ const static int CH_SHOOTSTICK_RV = 7;
 
 //------------------Driver Stick-------------------------
 const static int BUT_SHIFTER = 1;
-const static int BUT_BREACH2 = 10;
-const static int BUT_BREACH3 = 7;
-const static int BUT_BREACH4 = 11;
-const static int BUT_BREACH5 = 8;
+const static int BUT_BREACH2 = 7;
+const static int BUT_BREACH3 = 8;
+const static int BUT_BREACH4 = 9;
+const static int BUT_BREACH5 = 10;
 
 //-----------------Specials Stick-------------------------
 const static int BUT_FIRE = 1;

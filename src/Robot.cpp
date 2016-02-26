@@ -88,6 +88,9 @@ public:
 	CANTalon armMain;
 	Victor armSecondary;
 
+	CANTalon liftWinch;
+	CANTalon liftWinchSlave;
+
 	//----------------------SENSORS---------------------
 
 	//NavX Communication
@@ -172,6 +175,8 @@ public:
 		angleMotor(CH_ANGLEMOTOR),
 		armMain(CH_ARMMAIN),
 		armSecondary(CH_ARMSECONDARY),
+		liftWinch(CH_HANGA),
+		liftWinchSlave(CH_HANGB),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
@@ -201,6 +206,9 @@ public:
 		//angleMotor.ConfigEncoderCodesPerRev(1475);
 		//angleMotor.SetCloseLoopRampRate(0.25);
 		//angleMotor.SetPID(0.5,0,0);
+
+		liftWinchSlave.SetControlMode(CANSpeedController::kFollower);
+		liftWinchSlave.Set(CH_HANGA);
 	}
 
 
@@ -433,7 +441,7 @@ public:
 			shifter.Set(shifter.kReverse);
 		}
 
-		//-----------------HANGING-------------------------
+		//-----------------FEELERS/FORKS-------------------------
 		if(specials.GetRawButton(BUT_FORK))
 		{
 			fork.Set(fork.kForward);
@@ -510,6 +518,22 @@ public:
 
 		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
 		//SmartDashboard::PutNumber("Code Time:",elapsed_seconds1.count());
+
+
+		//--------------------Hang-------------------------
+		int pov = mainStick.GetPOV(0);
+		if(pov==315||pov==0||pov==45)
+		{
+			liftWinch.Set(1);
+		}
+		else if(pov==135||pov==180||pov==225)
+		{
+			liftWinch.Set(-1);
+		}
+		else
+		{
+			liftWinch.Set(0);
+		}
 
 	}
 
