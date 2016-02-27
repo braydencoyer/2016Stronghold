@@ -20,9 +20,9 @@ public:
 	//----------------------------AUTO MODE CONSTANTS-------------------
 	const std::string AUTO_MODE_OFF = "Off";
 	const std::string AUTO_MODE_FULL = "Full";
-	const std::string AUTO_MODE_BREACHTEST = "BreachTest";
-	const std::string AUTO_MODE_APROACHTEST = "ApproachTest";
-	const std::string AUTO_MODE_CLEARTEST = "ClearTest";
+	const std::string AUTO_MODE_BREACH = "Breach";
+	const std::string AUTO_MODE_APPROACH = "Approach";
+	const std::string AUTO_MODE_APPROACH_RV = "ApproachRev";
 	const std::string AUTO_MODE_ROTATETEST = "RotateTest";
 	const std::string AUTO_MODE_VISIONTEST = "VisionTest";
 	const std::string AUTO_MODE_FIRETEST = "FireTest";
@@ -246,9 +246,9 @@ public:
 		autoMode = new SendableChooser();
 		autoMode->AddDefault("Auto Off", (void*)&AUTO_MODE_OFF);
 		autoMode->AddObject("Full Auto", (void*)&AUTO_MODE_FULL);
-		autoMode->AddObject("[TEST]Breach",(void*)&AUTO_MODE_BREACHTEST);
-		autoMode->AddObject("[TEST]Approach",(void*)&AUTO_MODE_APROACHTEST);
-		autoMode->AddObject("[TEST]Clear",(void*)&AUTO_MODE_CLEARTEST);
+		autoMode->AddObject("Breach",(void*)&AUTO_MODE_BREACH);
+		autoMode->AddObject("Reach forward",(void*)&AUTO_MODE_APPROACH);
+		autoMode->AddObject("Reach reverse",(void*)&AUTO_MODE_APPROACH_RV);
 		autoMode->AddObject("[TEST]Rotate",(void*)&AUTO_MODE_ROTATETEST);
 		autoMode->AddObject("[TEST]Vision",(void*)&AUTO_MODE_VISIONTEST);
 		autoMode->AddObject("[TEST]Fire",(void*)&AUTO_MODE_FIRETEST);
@@ -478,11 +478,6 @@ public:
 
 		//Change shooter angle
 		double specialsY= specials.GetY();
-		//Move encoder to target TODO Remove when done
-		if(mainStick.GetRawButton(5))
-		{
-			ShooterToAngle(SmartDashboard::GetNumber("Encoder Target",0));
-		}
 		if(!angleBottom.Get() && specialsY<0) specialsY=0;
 		if(!angleTop.Get() && specialsY>0) specialsY=0;
 		SmartDashboard::PutNumber("Specials Y",specialsY);
@@ -658,23 +653,28 @@ public:
 		}
 
 		//-------------------Testing Functions------------------------
-		else if(autoSelected==AUTO_MODE_BREACHTEST)
+		else if(autoSelected==AUTO_MODE_BREACH)
 		{
 			//Breach only
 			switch(autoState)
 			{
 			case 0: {
+							AutonomousRaise();
+							autoState++;
+							break;
+						}
+			case 1: {
 				Breach(breachPos);
 				autoState++;
 				break;
 			}
-			case 1: {
+			case 2: {
 				//Done
 				drive.ArcadeDrive(0.0,0);
 			}
 			}
 		}
-		else if(autoSelected==AUTO_MODE_APROACHTEST)
+		else if(autoSelected==AUTO_MODE_APPROACH)
 		{
 			//Breach only
 			switch(autoState)
@@ -690,22 +690,22 @@ public:
 			}
 			}
 		}
-		else if(autoSelected==AUTO_MODE_CLEARTEST)
-		{
-			//Breach only
-			switch(autoState)
-			{
-			case 0: {
-				AutonomousClearDefense();
-				autoState++;
-				break;
-			}
-			case 1: {
-				//Done
-				drive.ArcadeDrive(0.0,0);
-			}
-			}
-		}
+		else if(autoSelected==AUTO_MODE_APPROACH_RV)
+				{
+					//Breach only
+					switch(autoState)
+					{
+					case 0: {
+						ApproachRampReverse();
+						autoState++;
+						break;
+					}
+					case 1: {
+						//Done
+						drive.ArcadeDrive(0.0,0);
+					}
+					}
+				}
 		else if(autoSelected==AUTO_MODE_ROTATETEST)
 		{
 			//Breach only
@@ -809,16 +809,9 @@ public:
 
 	//---------------------Auto Functions (like Commands)---------------
 
-	void AutonomousClearDefense()
-	{
-		drive.ArcadeDrive(1.0,0);
-		Wait(1);
-		drive.ArcadeDrive(0.0,0);
-	}
-
 	bool AutonomousPerRotateToAngle()
 	{
-		//Rotate to face tower TODO Calculate angles to face tower
+		//Rotate to face tower
 		//Approx -30, -10, 20, 40
 		switch(breachPos)
 		{
@@ -855,7 +848,6 @@ public:
 	{
 		//Initial firing sequence
 		//Raise angle up
-		//TODO Figure out angle
 		ShooterToAngle(500);
 	}
 
@@ -884,7 +876,7 @@ public:
 		ArmToAngle(1000);
 		//Back up
 		drive.ArcadeDrive(-1.0,0);
-		Wait(0.5);
+		Wait(0.25);
 		drive.ArcadeDrive(0.,0);
 		//Lift arm
 		armMain.Set(-1);
@@ -896,10 +888,7 @@ public:
 		Wait(1);
 		drive.ArcadeDrive(0.,0);
 		//Reset arm
-		ArmToAngle(0);
-		while(RotateToAngle(0)&&IsEnabled()){}
-
-
+		ArmToAngle(5);
 	}
 
 	void BreachCheval()
@@ -907,9 +896,6 @@ public:
 		DriverStation::ReportError("Breaching Cheval");
 		fork.Set(fork.kForward);
 		ApproachRampForward();
-		drive.ArcadeDrive(1.,0);
-		Wait(0.25);
-		drive.ArcadeDrive(0.,0);
 		ShooterToAngle(0);
 		drive.ArcadeDrive(0.3,0);
 		Wait(4);
@@ -977,7 +963,9 @@ public:
 		//Just drive?
 		ApproachRampForward();
 		drive.ArcadeDrive(1.,0);
-		Wait(4);
+		while(ahrs->GetRoll()<60){}
+		ShooterToAngle(0);
+		Wait(1);
 		drive.ArcadeDrive(0.,0);
 	}
 
@@ -1010,6 +998,8 @@ public:
 
 		//Get angle from NavX
 		double currentAngle = ahrs->GetYaw();
+
+		if(abs(currentAngle-targetAngle)<30) speed/=2;
 
 		//If at angle already, stop and return
 		//if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
@@ -1090,7 +1080,7 @@ public:
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Decrease angle
-					ShooterAngleToSpeed(0.25);
+					ShooterAngleToSpeed(0.2);
 				}
 				else
 				{
