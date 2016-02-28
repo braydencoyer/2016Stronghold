@@ -67,6 +67,9 @@ const static int BUT_BREACH3 = 8;
 const static int BUT_BREACH4 = 9;
 const static int BUT_BREACH5 = 10;
 
+const static int BUT_NAVX_RESET = 4;
+const static int BUT_ENCODERS_RESET = 6;
+
 //-----------------Specials Stick-------------------------
 const static int BUT_FIRE = 1;
 const static int BUT_SHOOTER_OUT = 3;
@@ -79,6 +82,6 @@ const static int BUT_ARMMAIN_RV = 7;
 const static int BUT_ARMSEC_FW = 11;
 const static int BUT_ARMSEC_RV = 10;
 
-const static int BUT_FORK = 8;
+const static int BUT_FEELERS = 8;
 
 #endif
