@@ -18,6 +18,7 @@ public:
 	//std::chrono::time_point<std::chrono::system_clock> start,end;
 
 	//----------------------------AUTO MODE CONSTANTS-------------------
+	//Thsese strings represent possible SmartDashboard auto modes/states/etc.
 	const std::string AUTO_MODE_OFF = "Off";
 	const std::string AUTO_MODE_FULL = "Full";
 	const std::string AUTO_MODE_BREACH = "Breach";
@@ -27,6 +28,8 @@ public:
 	const std::string AUTO_MODE_VISIONTEST = "VisionTest";
 	const std::string AUTO_MODE_FIRETEST = "FireTest";
 	const std::string AUTO_MODE_RAISETEST = "RaiseTest";
+	const std::string AUTO_MODE_DOUBLELB = "DoubleLowBar";
+	const std::string AUTO_MODE_STRAIGHTTEST = "DriveStraightTest";
 
 	const std::string BREACH_POS_LB = "LB";
 	const std::string BREACH_POS_0 = "0";
@@ -45,11 +48,16 @@ public:
 
 
 	//-------------------AUTO MODE-----------------
-	//Auto Modes
+	//Auto Mode
 	SendableChooser *autoMode;
+
+	//What defense is in each position
 	SendableChooser *def[4];
+
+	//Position number to breach
 	SendableChooser *toBreach;
 
+	//Strings and ints for holding the above
 	std::string autoSelected;
 	std::string defense[4];
 	int breachPos;
@@ -58,7 +66,7 @@ public:
 
 
 	//---------------------------NAVX CONSTANTS--------------------
-	double ANGLE_TOLERANCE = 2;   //Degrees
+	double ANGLE_TOLERANCE = 2;   //Degrees, how far can we be + or -
 
 	//--------------------------VISION CONSTANTS-------------------
 	int TARGET_ORIGIN_X = 287;
@@ -77,13 +85,11 @@ public:
 	Victor left, right;
 	RobotDrive drive;
 
-	const double INCHES_PER_SEC = 67;
-
 	CANTalon shooterA;
 	CANTalon shooterB;
 	CANTalon angleMotor;
 	//One rotation: 9124
-	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1;
+	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1; //Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
 	Victor armSecondary;
@@ -120,6 +126,7 @@ public:
 
 	//Images: Frame stores RGB from camera, binaryFrame stores filtered image
 	Image *frame;
+	Image *rearFrame;
 	Image *binaryFrame;
 
 	//Filter function arguments
@@ -130,11 +137,17 @@ public:
 	IMAQdxSession session;
 	int imaqError;
 
+	IMAQdxSession rearSession;
+
 	//Position of target on-screen, to be used later.
 	double screenPosX;
 	double screenPosY;
 
 	const int CYCLES_PER_FRAME = 5;
+
+	//Info for switching the active camera
+	bool rearCamActive;
+	bool swapButtonPressed;
 
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
@@ -224,11 +237,6 @@ public:
 
 		armMain.SetSafetyEnabled(false);
 		armSecondary.SetSafetyEnabled(false);
-
-		SmartDashboard::PutNumber("Angle Target:",0);
-
-		SmartDashboard::PutNumber("Encoder Target",0);
-
 		//--------------NAVX-MXP-------------------
 		//Try to instantiate navx. If it fails, catch error so code doesn't crash.
 		try {
@@ -251,10 +259,12 @@ public:
 		autoMode->AddObject("Breach",(void*)&AUTO_MODE_BREACH);
 		autoMode->AddObject("Reach forward",(void*)&AUTO_MODE_APPROACH);
 		autoMode->AddObject("Reach reverse",(void*)&AUTO_MODE_APPROACH_RV);
+		autoMode->AddObject("Full Auto and Return",(void*)&AUTO_MODE_DOUBLELB);
 		autoMode->AddObject("[TEST]Rotate",(void*)&AUTO_MODE_ROTATETEST);
 		autoMode->AddObject("[TEST]Vision",(void*)&AUTO_MODE_VISIONTEST);
 		autoMode->AddObject("[TEST]Fire",(void*)&AUTO_MODE_FIRETEST);
 		autoMode->AddObject("[TEST]Raise Shooter",(void*)&AUTO_MODE_RAISETEST);
+		autoMode->AddObject("[TEST]Drive Straight",(void*)&AUTO_MODE_STRAIGHTTEST);
 
 		SmartDashboard::PutData("Auto Modes", autoMode);
 
@@ -301,23 +311,44 @@ public:
 		//Create space in memory for images
 		binaryFrame = imaqCreateImage(IMAQ_IMAGE_U8,0);
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
+		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
 		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
 		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
+					//Warn drivers that camera is dead
+					DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
+				}
+		imaqError = IMAQdxConfigureGrab(session);
+
+		if(imaqError != IMAQdxErrorSuccess) {
 			//Tell drivers that we can't load the camera
-			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
+			DriverStation::ReportError("IMAQdxConfigureGrab error: " + std::to_string((long)imaqError) + "\n");
 		}
 
+		//Open cam1
+		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &rearSession);
+		if(imaqError != IMAQdxErrorSuccess) {
+					//Warn drivers that camera is dead
+					DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
+				}
 		//Configure the Grab session. Returns a number other than IMAQdxErrorSuccess if something bad happens.
-		imaqError = IMAQdxConfigureGrab(session);
+		//imaqError = IMAQdxConfigureGrab(rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
-			DriverStation::ReportError("IMAQdxConfigureGrab error: " + std::to_string((long)imaqError) + "\n");
+			DriverStation::ReportError("IMAQdxConfigureGrab 2 error: " + std::to_string((long)imaqError) + "\n");
 		}
 
 		//Starts the session we configured above
 		IMAQdxStartAcquisition(session);
+		//IMAQdxStartAcquisition(rearSession);
+		if(imaqError != IMAQdxErrorSuccess) {
+					//Warn drivers that camera is dead
+					DriverStation::ReportError("Configure session error: " + std::to_string((long)imaqError) + "\n");
+				}
+
+		rearCamActive = false;
+		swapButtonPressed = false;
 
 		//Put spaces for these numbers on dashboard. Used to adjust vision masking.
 		SmartDashboard::PutNumber("Tote hue min", RING_HUE_RANGE.minValue);
@@ -333,7 +364,7 @@ public:
 
 
 		//-------------Encoders--------------
-		//Reset all encoders if Talon power was not cycled
+		//Reset all encoders if Talon power has not cycled
 		angleMotor.SetEncPosition(0);
 		leftEnc.Reset();
 		rightEnc.Reset();
@@ -427,32 +458,74 @@ public:
 
 
 		//------------------CAMERA FEED---------------------
-		cycle++;
 
-		//We don't want to send image every loop, send only every CYCLES_PER_FRAME ccles
+		//Camera swappers
+		if(mainStick.GetRawButton(BUT_SWAPCAMS)&&!swapButtonPressed)
+		{
+			//Save that button is pressed for next cycle
+			swapButtonPressed=true;
+
+			//Swap active camera
+			rearCamActive=!rearCamActive;
+
+			if(rearCamActive)
+			{
+				IMAQdxStopAcquisition(session);
+				IMAQdxUnconfigureAcquisition(session);
+				IMAQdxStartAcquisition(rearSession);
+				IMAQdxConfigureGrab(rearSession);
+			}
+			else
+			{
+				IMAQdxStopAcquisition(rearSession);
+				IMAQdxUnconfigureAcquisition(rearSession);
+				IMAQdxStartAcquisition(session);
+				IMAQdxConfigureGrab(session);
+			}
+		}
+		else
+		{
+			//Save that button has been released
+			if(!mainStick.GetRawButton(BUT_SWAPCAMS)) swapButtonPressed=false;
+		}
+
+
+		cycle++;
+		//We don't want to send image every loop, send only every CYCLES_PER_FRAME cycles
 		if(cycle>CYCLES_PER_FRAME)
 		{
 			cycle = 0;
 
-			//Get image
-			IMAQdxGrab(session, frame, true, NULL);
+			if(rearCamActive)
+			{
+				//Get rear camera
+				IMAQdxGrab(rearSession,frame,false,NULL);
+				CameraServer::GetInstance()->SetImage(frame);
+			}
+			else
+			{
+				//Get front camera
+				//Get image
+				IMAQdxGrab(session, frame, false, NULL);
 
-			//Draw a target on the frame
-			imaqDrawShapeOnImage(frame, frame, { TARGET_ORIGIN_X-ORIGIN_X_TOL, TARGET_ORIGIN_Y-ORIGIN_Y_TOL,ORIGIN_X_TOL*2,ORIGIN_Y_TOL*2}, DrawMode::IMAQ_PAINT_INVERT, ShapeMode::IMAQ_SHAPE_RECT, 0.0f);
-			imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
-			imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},0.0f);
-			imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
-			imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
+				//Draw a target on the frame
+				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
+				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},0.0f);
+				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
+				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
 
-			//Set image on camera server to frame
-			CameraServer::GetInstance()->SetImage(frame);
+				//Set image on camera server to frame
+				CameraServer::GetInstance()->SetImage(frame);
+			}
 		}
 
 
 		//-----------------DRIVE SYSTEM---------------------
+		//Drive with main joystick values
 		drive.ArcadeDrive(-mainStick.GetY(),mainStick.GetX());
 
 		//-----------------SHIFTER--------------------------
+		//Shift if button is pressed
 		if(mainStick.GetRawButton(BUT_SHIFTER))
 		{
 			shifter.Set(shifter.kForward);
@@ -463,6 +536,7 @@ public:
 		}
 
 		//-----------------FEELERS-------------------------
+		//Extend feelers if button is pressed
 		if(specials.GetRawButton(BUT_FEELERS))
 		{
 			feelers.Set(feelers.kForward);
@@ -497,15 +571,15 @@ public:
 			shootyStick.Set(shootyStick.kReverse);
 		}
 
-		//Change shooter angle
+		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY= specials.GetY();
 		if(!angleBottom.Get() && specialsY<0) specialsY=0;
 		if(!angleTop.Get() && specialsY>0) specialsY=0;
-		SmartDashboard::PutNumber("Specials Y",specialsY);
 		ShooterAngleToSpeed(specialsY);
 
 
 		//--------------------Arm---------------------------
+		//Move arm if buttons are pressed, also using throttle lever value calculated above in Shooter
 		if(specials.GetRawButton(BUT_ARMMAIN_FW))
 		{
 			armMain.Set(mult);
@@ -537,6 +611,7 @@ public:
 
 
 		//--------------------Hang-------------------------
+		//Use POV switch for hang motors. TODO Remove if not on production robot
 		int pov = mainStick.GetPOV(0);
 		if(pov==315||pov==0||pov==45)
 		{
@@ -612,10 +687,16 @@ public:
 
 		//ZeroShooter();
 
-		//Reset NavX in case it drifted while stationary
+		//Re zero NavX in case it drifted while stationary
+		//NOTE: THIS IS NOT RECALIBRATION.
 		ahrs->ResetDisplacement();
 		ahrs->ZeroYaw();
 
+		//Re zero all encoders because apparently they drift a lot
+		leftEnc.Reset();
+		rightEnc.Reset();
+		armMain.SetEncPosition(0);
+		angleMotor.SetEncPosition(0);
 	}
 
 
@@ -623,7 +704,7 @@ public:
 	//-------------------Switchers-------------------------
 	void AutonomousPeriodic()
 	{
-		if(autoSelected==AUTO_MODE_FULL)
+		if(autoSelected==AUTO_MODE_FULL || autoSelected==AUTO_MODE_DOUBLELB)
 		{
 			//--------------------------Full Auto--------------------------
 			//Switch case based on current autoState
@@ -670,7 +751,17 @@ public:
 			}
 			case 6:
 			{
-				//done
+				if(autoSelected!=AUTO_MODE_DOUBLELB)
+				{
+					autoState++;
+					break;
+				}
+				BreachLowBarReverse();
+				autoState++;
+				break;
+			}
+			case 7:
+			{
 				DisabledPeriodic();
 				break;
 			}
@@ -684,10 +775,10 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-							AutonomousRaise();
-							autoState++;
-							break;
-						}
+				AutonomousRaise();
+				autoState++;
+				break;
+			}
 			case 1: {
 				Breach(breachPos);
 				autoState++;
@@ -696,6 +787,7 @@ public:
 			case 2: {
 				//Done
 				drive.ArcadeDrive(0.0,0);
+				break;
 			}
 			}
 		}
@@ -712,25 +804,27 @@ public:
 			case 1: {
 				//Done
 				drive.ArcadeDrive(0.0,0);
+				break;
 			}
 			}
 		}
 		else if(autoSelected==AUTO_MODE_APPROACH_RV)
-				{
-					//Breach only
-					switch(autoState)
-					{
-					case 0: {
-						ApproachRampReverse();
-						autoState++;
-						break;
-					}
-					case 1: {
-						//Done
-						drive.ArcadeDrive(0.0,0);
-					}
-					}
-				}
+		{
+			//Breach only
+			switch(autoState)
+			{
+			case 0: {
+				ApproachRampReverse();
+				autoState++;
+				break;
+			}
+			case 1: {
+				//Done
+				drive.ArcadeDrive(0.0,0);
+				break;
+			}
+			}
+		}
 		else if(autoSelected==AUTO_MODE_ROTATETEST)
 		{
 			//Breach only
@@ -744,6 +838,7 @@ public:
 			case 1: {
 				//Done
 				drive.ArcadeDrive(0.0,0);
+				break;
 			}
 			}
 		}
@@ -776,6 +871,7 @@ public:
 			case 1: {
 				//Done
 				drive.ArcadeDrive(0.0,0);
+				break;
 			}
 			}
 		}
@@ -792,6 +888,26 @@ public:
 			case 1: {
 				//Done
 				drive.ArcadeDrive(0.0,0);
+				break;
+			}
+			}
+		}
+		else if (autoSelected==AUTO_MODE_STRAIGHTTEST)
+		{
+			//Drive extremely straight
+			switch(autoState)
+			{
+			case 0:
+			{
+				if(!CorrectedDrive(1,0,100000)) break;
+				autoState++;
+				break;
+			}
+			case 1:
+			{
+				//done
+				drive.ArcadeDrive(0.,0);
+				break;
 			}
 			}
 		}
@@ -896,7 +1012,7 @@ public:
 	{
 		DriverStation::ReportError("Breaching Portcullis");
 		//Turn around
-		ArmToAngle(2800);
+		ArmToAngle(2500);
 		ApproachRampReverse();
 		//Deploy arm
 		ArmToAngle(3000);
@@ -913,6 +1029,7 @@ public:
 		drive.ArcadeDrive(-1.,0);
 		while(armMain.GetEncPosition()>10){}
 		drive.ArcadeDrive(0.,0);
+		armMain.Set(0);
 	}
 
 	void BreachCheval()
@@ -924,6 +1041,7 @@ public:
 		drive.ArcadeDrive(0.3,0);
 		Wait(4);
 		drive.ArcadeDrive(0.,0);
+		feelers.Set(feelers.kReverse);
 	}
 
 	void BreachMoat()
@@ -957,26 +1075,25 @@ public:
 		DriverStation::ReportError("Breaching Sally Port");
 		//Turn around
 		//Extend arm & secondary arm
-		ArmToAngle(1200);
+		ArmToAngle(1765);
 		armSecondary.Set(1);
-		Wait(0.1);
+		Wait(0.3);
 		armSecondary.Set(0);
 		ApproachRampReverse();
-		//Reverse
-		ArmToAngle(1800);
+		ArmToAngle(2007);
 		//Pull door forward
-		drive.TankDrive(1,0.3);
+		drive.TankDrive(1.,0);
 		Wait(1);
 		//Spin around and move quick
-		while(!RotateToAngle(90,1)){}
-		drive.TankDrive(0.3,1);
+		drive.ArcadeDrive(0.,-1);
 		Wait(1);
+		while(!RotateToAngle(-25,1)){}
 		drive.ArcadeDrive(1.,0);
 		Wait(1);
 		drive.ArcadeDrive(0.,0);
 		//Stow Arm
 		armSecondary.Set(-1);
-		Wait(0.1);
+		Wait(0.3);
 		armSecondary.Set(0);
 		ArmToAngle(10);
 	}
@@ -1006,31 +1123,41 @@ public:
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
-		ShooterToAngle(500);
+		ShooterToAngle(180);
 		ApproachRampForward();
-		drive.ArcadeDrive(0.4,0);
-		Wait(2.5);
+		drive.ArcadeDrive(0.7,0);
+		Wait(3);
 		drive.ArcadeDrive(0.,0);
+	}
+
+	void BreachLowBarReverse()
+	{
+		ShooterToAngle(180);
+		while(!RotateToAngle(0)){}
+		drive.ArcadeDrive(-1.,0);
+		while(ahrs->GetRoll()<-6 && ShouldBeBreaching()){}
+		drive.ArcadeDrive(-0.7,0);
+		Wait(3);
+		drive.ArcadeDrive(0.,0);
+
 	}
 	/*----------------------------------------------------------------------
 	 * 							NavX-MXP Navigation
 	 * ---------------------------------------------------------------------
 	 */
 
-	bool RotateToAngle(double targetAngle, double speed = 0.5)
+	bool RotateToAngle(double targetAngle, double speed = 0.8)
 	{
 		//Called periodically, returns true if facing already
 
 		//Get angle from NavX
 		double currentAngle = ahrs->GetYaw();
 
-		if(abs(currentAngle-targetAngle)<30) speed/=2;
-
 		//If at angle already, stop and return
 		//if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
 		if(abs(currentAngle-targetAngle)<ANGLE_TOLERANCE ||
 				((targetAngle>180-ANGLE_TOLERANCE || targetAngle<-180+ANGLE_TOLERANCE) &&
-				(currentAngle>180-ANGLE_TOLERANCE || currentAngle<-180+ANGLE_TOLERANCE)))
+						(currentAngle>180-ANGLE_TOLERANCE || currentAngle<-180+ANGLE_TOLERANCE)))
 		{
 			//Extra logic is to deal with turning to +-180
 			drive.ArcadeDrive(0.,0);
@@ -1053,18 +1180,48 @@ public:
 
 	void ApproachRampForward(double speed = 1)
 	{
-		while(!RotateToAngle(0) && IsEnabled()){}
+		while(!RotateToAngle(0) && ShouldBeBreaching()){}
 		drive.TankDrive(speed-0.08,speed);
-		while(ahrs->GetRoll()<6 && IsEnabled()){}
+		while(ahrs->GetRoll()<6 && ShouldBeBreaching()){}
 		drive.ArcadeDrive(0.,0);
 	}
 
 	void ApproachRampReverse(double speed = 1)
 	{
-		while(!RotateToAngle(180) && IsEnabled()){}
+		while(!RotateToAngle(180) && ShouldBeBreaching()){}
 		drive.ArcadeDrive(-speed,0);
-		while(ahrs->GetRoll()>-6 && IsEnabled()){}
+		while(ahrs->GetRoll()>-6 && ShouldBeBreaching()){}
 		drive.ArcadeDrive(0.,0);
+	}
+
+	//This periodic function will drive the robot at an angle, correcting as needed
+	bool CorrectedDrive(double speed, double angle, int encoderTicks)
+	{
+		//Check if we have driven far enough
+		int currentEncoderTicks = leftEnc.Get();
+		if((speed>0&&encoderTicks>=currentEncoderTicks) || (speed<0&&encoderTicks<=currentEncoderTicks))
+		{
+			drive.ArcadeDrive(0.,0);
+			return true;
+		}
+
+		//We have not driven far enough, drive
+
+		//Set a correction factor using the sine of our angle difference
+		double angleOffset = ahrs->GetYaw()-angle;
+		//sin will return a value equivalent to -1 at -90 deg, 0 at 0 deg, and 1 at 90 deg
+		//sin wants a value in radians, convert degrees to radians
+		//M_PI is the value of pi
+		angleOffset = angleOffset * M_PI/180.0;
+
+		double correctionFactor = -sin(angleOffset);
+		double speedMult = speed*cos(angleOffset);
+
+		//Use correctionFactor as a turning argument for ArcadeDrive, also slow down if turned a lot
+		drive.ArcadeDrive(speedMult,correctionFactor);
+
+
+		return false;
 	}
 
 
@@ -1346,38 +1503,32 @@ public:
 
 
 	void ArmToAngle(int target)
-		{
-			if(target<armMain.GetEncPosition())
-			{
-				armMain.Set(1);
-				while(target<armMain.GetEncPosition() && IsEnabled()){};
-
-			}
-			else if(target>armMain.GetEncPosition())
-			{
-				armMain.Set(-1);
-				while(target>armMain.GetEncPosition() && IsEnabled()){};
-			}
-		}
-
-	/*void moveXIn(double x, double speed)
 	{
-		double inPerSec = INCHES_PER_SEC*speed;
-		if(x>0)
+		if(target<armMain.GetEncPosition())
 		{
-			double timeToWait = 1/inPerSec*x;
-			drive.ArcadeDrive(-speed,0);
-			Wait(timeToWait);
-			drive.ArcadeDrive(0.,0);
+			armMain.Set(-1);
+			while(target<armMain.GetEncPosition() && IsEnabled()){};
+
 		}
-		else
+		else if(target>armMain.GetEncPosition())
 		{
-			double timeToWait = 1/inPerSec*x*-1;
-			drive.ArcadeDrive(speed,0);
-			Wait(timeToWait);
-			drive.ArcadeDrive(0.,0);
+			armMain.Set(1);
+			while(target>armMain.GetEncPosition() && IsEnabled()){};
 		}
-	}*/
+		armMain.Set(0);
+	}
+
+
+	/* ----------------------------------------------------
+	 *                   Misc
+	 * ----------------------------------------------------
+	 */
+
+	bool ShouldBeBreaching()
+	{
+		//Return true if we are autonomous and enabled OR a button is pressed and we are enabled
+		return (IsAutonomous()&&IsEnabled())||(mainStick.GetRawButton(BUT_BREACH2)||mainStick.GetRawButton(BUT_BREACH3)||mainStick.GetRawButton(BUT_BREACH4)||mainStick.GetRawButton(BUT_BREACH5));
+	}
 
 	//---------------MEASUREMENTS------------------
 	//Defences are 47.34 accross on floor, 48 in total distance over
