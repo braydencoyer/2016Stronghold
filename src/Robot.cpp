@@ -174,6 +174,8 @@ public:
 
 	Encoder leftEnc,rightEnc;
 
+	Timer timer;
+
 	/*--------------------------------------------------------------
 	 *						Initialization
 	 * -------------------------------------------------------------
@@ -200,7 +202,8 @@ public:
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
 		angleTop(CH_SHOOTER_ANGLE_TOP,true),
 		leftEnc(CH_ENC_L_A,CH_ENC_L_B),
-		rightEnc(CH_ENC_R_A,CH_ENC_R_B)
+		rightEnc(CH_ENC_R_A,CH_ENC_R_B),
+		timer()
 	{
 
 		//--------Motor inversion----------------
@@ -797,7 +800,7 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-				ApproachRampForward();
+				CorrectedApproach(1,0);
 				autoState++;
 				break;
 			}
@@ -814,7 +817,7 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-				ApproachRampReverse();
+				CorrectedApproach(-1,180);
 				autoState++;
 				break;
 			}
@@ -899,11 +902,17 @@ public:
 			{
 			case 0:
 			{
-				if(!CorrectedDrive(1,0,100000)) break;
+				AutonomousRaise();
 				autoState++;
 				break;
 			}
 			case 1:
+			{
+				CorrectedDrive(1,0,3);
+				autoState++;
+				break;
+			}
+			case 2:
 			{
 				//done
 				drive.ArcadeDrive(0.,0);
@@ -1013,7 +1022,8 @@ public:
 		DriverStation::ReportError("Breaching Portcullis");
 		//Turn around
 		ArmToAngle(2500);
-		ApproachRampReverse();
+		while(!RotateToAngle(180)){}
+		CorrectedApproach(-1,180);
 		//Deploy arm
 		ArmToAngle(3000);
 		//Back up
@@ -1036,46 +1046,41 @@ public:
 	{
 		DriverStation::ReportError("Breaching Cheval");
 		feelers.Set(feelers.kForward);
-		ApproachRampForward();
+		CorrectedApproach(1,0);
 		ShooterToAngle(50);
-		drive.ArcadeDrive(0.3,0);
-		Wait(4);
-		drive.ArcadeDrive(0.,0);
+		CorrectedDrive(0.3,0,4);
 		feelers.Set(feelers.kReverse);
 	}
 
 	void BreachMoat()
 	{
 		DriverStation::ReportError("Breaching Moat");
-		ApproachRampForward();
+		CorrectedApproach(1,0);
 		//Just drive?
-		drive.ArcadeDrive(1.,0);
-		Wait(2.5);
-		drive.ArcadeDrive(0.,0);
+		CorrectedDrive(1,0,2.5);
 	}
 
 	void BreachRamparts()
 	{
 		DriverStation::ReportError("Breaching Ramparts");
 		//Just drive?
-		ApproachRampForward();
-		drive.ArcadeDrive(1.,0);
-		Wait(1.5);
-		drive.ArcadeDrive(0.,0);
+		CorrectedApproach(1,0);
+		CorrectedDrive(1,0,1.5);
 	}
 
 	void BreachDrawbridge()
 	{
 		DriverStation::ReportError("Reaching Drawbridge (Cannot breach)");
-		ApproachRampReverse();
+		CorrectedApproach(-1,180);
 	}
 
 	void BreachSally()
 	{
-		DriverStation::ReportError("Breaching Sally Port");
+		DriverStation::ReportError("Reaching Sally Port");
+		CorrectedApproach(-1,180);
 		//Turn around
 		//Extend arm & secondary arm
-		ArmToAngle(1765);
+/*		ArmToAngle(1765);
 		armSecondary.Set(1);
 		Wait(0.3);
 		armSecondary.Set(0);
@@ -1095,14 +1100,14 @@ public:
 		armSecondary.Set(-1);
 		Wait(0.3);
 		armSecondary.Set(0);
-		ArmToAngle(10);
+		ArmToAngle(10);*/
 	}
 
 	void BreachRockWall()
 	{
 		DriverStation::ReportError("Breaching Rock Wall");
 		//Just drive?
-		ApproachRampForward();
+		CorrectedApproach(1,0);
 		drive.ArcadeDrive(1.,0);
 		while(ahrs->GetRoll()<60){}
 		ShooterToAngle(10);
@@ -1114,31 +1119,24 @@ public:
 	{
 		DriverStation::ReportError("Breaching Rough Terrain");
 		//Just drive?
-		ApproachRampForward();
-		drive.ArcadeDrive(1.,0);
-		Wait(1.5);
-		drive.ArcadeDrive(0.,0);
+		CorrectedApproach(1,0);
+		CorrectedDrive(1,0,1.5);
 	}
 
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
 		ShooterToAngle(180);
-		ApproachRampForward();
-		drive.ArcadeDrive(0.7,0);
-		Wait(3);
-		drive.ArcadeDrive(0.,0);
+		CorrectedApproach(1,0);
+		CorrectedDrive(0.7,0,3);
 	}
 
 	void BreachLowBarReverse()
 	{
 		ShooterToAngle(180);
 		while(!RotateToAngle(0)){}
-		drive.ArcadeDrive(-1.,0);
-		while(ahrs->GetRoll()<-6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(-0.7,0);
-		Wait(3);
-		drive.ArcadeDrive(0.,0);
+		CorrectedApproach(-1,0);
+		CorrectedDrive(-0.7,0,3);
 
 	}
 	/*----------------------------------------------------------------------
@@ -1177,7 +1175,7 @@ public:
 		}
 		return false;
 	}
-
+/*
 	void ApproachRampForward(double speed = 1)
 	{
 		while(!RotateToAngle(0) && ShouldBeBreaching()){}
@@ -1193,35 +1191,65 @@ public:
 		while(ahrs->GetRoll()>-6 && ShouldBeBreaching()){}
 		drive.ArcadeDrive(0.,0);
 	}
+*/
 
-	//This periodic function will drive the robot at an angle, correcting as needed
-	bool CorrectedDrive(double speed, double angle, int encoderTicks)
-	{
-		//Check if we have driven far enough
-		int currentEncoderTicks = leftEnc.Get();
-		if((speed>0&&encoderTicks>=currentEncoderTicks) || (speed<0&&encoderTicks<=currentEncoderTicks))
+	void CorrectedApproach(double speed, double angle)
 		{
+			while(!RotateToAngle(angle)&&ShouldBeBreaching()){}
+			timer.Reset();
+			timer.Start();
+			while(((ahrs->GetRoll()>-6 &&speed<0) || (ahrs->GetRoll()<6&&speed>0 ))&& ShouldBeBreaching())
+			{
+				//We have not driven far enough, drive
+
+				//Set a correction factor using the sine of our angle difference
+				double angleOffset = ahrs->GetYaw()-angle;
+				//sin will return a value equivalent to -1 at -90 deg, 0 at 0 deg, and 1 at 90 deg
+				//sin wants a value in radians, convert degrees to radians
+				//M_PI is the value of pi
+				angleOffset = angleOffset * M_PI/180.0;
+
+				double correctionFactor = -sin(angleOffset);
+				double speedMult = speed*cos(angleOffset);
+
+				//Use correctionFactor as a turning argument for ArcadeDrive, also slow down if turned a lot
+				drive.ArcadeDrive(speedMult,correctionFactor*10);
+
+			}
+			timer.Stop();
+
 			drive.ArcadeDrive(0.,0);
-			return true;
+
 		}
 
-		//We have not driven far enough, drive
 
-		//Set a correction factor using the sine of our angle difference
-		double angleOffset = ahrs->GetYaw()-angle;
-		//sin will return a value equivalent to -1 at -90 deg, 0 at 0 deg, and 1 at 90 deg
-		//sin wants a value in radians, convert degrees to radians
-		//M_PI is the value of pi
-		angleOffset = angleOffset * M_PI/180.0;
+	//This periodic function will drive the robot at an angle, correcting as needed
+	void CorrectedDrive(double speed, double angle, double numSeconds)
+	{
+		timer.Reset();
+		timer.Start();
+		while(timer.Get()<numSeconds && ShouldBeBreaching())
+		{
+			//We have not driven far enough, drive
 
-		double correctionFactor = -sin(angleOffset);
-		double speedMult = speed*cos(angleOffset);
+			//Set a correction factor using the sine of our angle difference
+			double angleOffset = ahrs->GetYaw()-angle;
+			//sin will return a value equivalent to -1 at -90 deg, 0 at 0 deg, and 1 at 90 deg
+			//sin wants a value in radians, convert degrees to radians
+			//M_PI is the value of pi
+			angleOffset = angleOffset * M_PI/180.0;
 
-		//Use correctionFactor as a turning argument for ArcadeDrive, also slow down if turned a lot
-		drive.ArcadeDrive(speedMult,correctionFactor);
+			double correctionFactor = -sin(angleOffset);
+			double speedMult = speed*cos(angleOffset);
 
+			//Use correctionFactor as a turning argument for ArcadeDrive, also slow down if turned a lot
+			drive.ArcadeDrive(speedMult,correctionFactor*10);
 
-		return false;
+		}
+		timer.Stop();
+
+		drive.ArcadeDrive(0.,0);
+
 	}
 
 
