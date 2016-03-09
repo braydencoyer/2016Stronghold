@@ -80,6 +80,9 @@ public:
 	float AREA_MINIMUM = 0.5; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
+	//-------------------MISC CONSTANTS-----------------------
+	double MAX_IN_SPEED = .5;
+
 
 	//-----------------------MOTORS-------------------------
 	Victor left, right;
@@ -92,10 +95,10 @@ public:
 	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1; //Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
-	Victor armSecondary;
+	//Victor armSecondary;
 
-	CANTalon liftWinch;
-	CANTalon liftWinchSlave;
+	//CANTalon liftWinch;
+	//CANTalon liftWinchSlave;
 
 	//----------------------SENSORS---------------------
 
@@ -189,9 +192,9 @@ public:
 		shooterB(CH_SHOOTERB),
 		angleMotor(CH_ANGLEMOTOR),
 		armMain(CH_ARMMAIN),
-		armSecondary(CH_ARMSECONDARY),
-		liftWinch(CH_HANGA),
-		liftWinchSlave(CH_HANGB),
+		//armSecondary(CH_ARMSECONDARY),
+		//liftWinch(CH_HANGA),
+		//liftWinchSlave(CH_HANGB),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
@@ -223,8 +226,8 @@ public:
 		//angleMotor.SetCloseLoopRampRate(0.25);
 		//angleMotor.SetPID(0.5,0,0);
 
-		liftWinchSlave.SetControlMode(CANSpeedController::kFollower);
-		liftWinchSlave.Set(CH_HANGA);
+		//liftWinchSlave.SetControlMode(CANSpeedController::kFollower);
+		//liftWinchSlave.Set(CH_HANGA);
 	}
 
 
@@ -239,7 +242,7 @@ public:
 		angleMotor.SetEncPosition(0);
 
 		armMain.SetSafetyEnabled(false);
-		armSecondary.SetSafetyEnabled(false);
+		//armSecondary.SetSafetyEnabled(false);
 		//--------------NAVX-MXP-------------------
 		//Try to instantiate navx. If it fails, catch error so code doesn't crash.
 		try {
@@ -319,9 +322,9 @@ public:
 		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
 		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
-					//Warn drivers that camera is dead
-					DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
-				}
+			//Warn drivers that camera is dead
+			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
+		}
 		imaqError = IMAQdxConfigureGrab(session);
 
 		if(imaqError != IMAQdxErrorSuccess) {
@@ -332,9 +335,9 @@ public:
 		//Open cam1
 		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
-					//Warn drivers that camera is dead
-					DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
-				}
+			//Warn drivers that camera is dead
+			DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
+		}
 		//Configure the Grab session. Returns a number other than IMAQdxErrorSuccess if something bad happens.
 		//imaqError = IMAQdxConfigureGrab(rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
@@ -346,9 +349,9 @@ public:
 		IMAQdxStartAcquisition(session);
 		//IMAQdxStartAcquisition(rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
-					//Warn drivers that camera is dead
-					DriverStation::ReportError("Configure session error: " + std::to_string((long)imaqError) + "\n");
-				}
+			//Warn drivers that camera is dead
+			DriverStation::ReportError("Configure session error: " + std::to_string((long)imaqError) + "\n");
+		}
 
 		rearCamActive = false;
 		swapButtonPressed = false;
@@ -554,7 +557,7 @@ public:
 		//Speed based on throttle lever, convert from -1<t<1 to 0<t<1
 		double speed = 0;
 		if(specials.GetRawButton(BUT_SHOOTER_OUT)) speed=1;
-		else if(specials.GetRawButton(BUT_SHOOTER_IN)) speed=-1;
+		else if(specials.GetRawButton(BUT_SHOOTER_IN)) speed=-MAX_IN_SPEED;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
@@ -583,11 +586,11 @@ public:
 
 		//--------------------Arm---------------------------
 		//Move arm if buttons are pressed, also using throttle lever value calculated above in Shooter
-		if(specials.GetRawButton(BUT_ARMMAIN_FW))
+		if(specials.GetRawButton(BUT_ARMMAIN_FW) || specials.GetRawButton(BUT_ARMSEC_FW))
 		{
 			armMain.Set(mult);
 		}
-		else if(specials.GetRawButton(BUT_ARMMAIN_RV))
+		else if(specials.GetRawButton(BUT_ARMMAIN_RV) || specials.GetRawButton(BUT_ARMSEC_FW))
 		{
 			armMain.Set(-mult);
 		}
@@ -596,7 +599,7 @@ public:
 			armMain.Set(0);
 		}
 
-		if(specials.GetRawButton(BUT_ARMSEC_FW))
+		/*if(specials.GetRawButton(BUT_ARMSEC_FW))
 		{
 			armSecondary.SetSpeed(mult);
 		}
@@ -607,12 +610,12 @@ public:
 		else
 		{
 			armSecondary.SetSpeed(0);
-		}
+		}*/
 
 		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
 		//SmartDashboard::PutNumber("Code Time:",elapsed_seconds1.count());
 
-
+		/*
 		//--------------------Hang-------------------------
 		//Use POV switch for hang motors. TODO Remove if not on production robot
 		int pov = mainStick.GetPOV(0);
@@ -628,7 +631,7 @@ public:
 		{
 			liftWinch.Set(0);
 		}
-
+		 */
 	}
 
 
@@ -650,7 +653,7 @@ public:
 		angleMotor.Set(0);
 
 		armMain.Set(0);
-		armSecondary.Set(0);
+		//armSecondary.Set(0);
 
 		//Reset pneumatics (remove if needed)
 		shootyStick.Set(shootyStick.kReverse);
@@ -908,7 +911,7 @@ public:
 			}
 			case 1:
 			{
-				CorrectedDrive(1,0,3);
+				CorrectedDrive(0.5,0,3);
 				autoState++;
 				break;
 			}
@@ -1080,7 +1083,7 @@ public:
 		CorrectedApproach(-1,180);
 		//Turn around
 		//Extend arm & secondary arm
-/*		ArmToAngle(1765);
+		/*		ArmToAngle(1765);
 		armSecondary.Set(1);
 		Wait(0.3);
 		armSecondary.Set(0);
@@ -1126,7 +1129,7 @@ public:
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
-		ShooterToAngle(180);
+		ShooterToAngle(280);//Was 180
 		CorrectedApproach(1,0);
 		CorrectedDrive(0.7,0,3);
 	}
@@ -1175,7 +1178,7 @@ public:
 		}
 		return false;
 	}
-/*
+	/*
 	void ApproachRampForward(double speed = 1)
 	{
 		while(!RotateToAngle(0) && ShouldBeBreaching()){}
@@ -1191,36 +1194,36 @@ public:
 		while(ahrs->GetRoll()>-6 && ShouldBeBreaching()){}
 		drive.ArcadeDrive(0.,0);
 	}
-*/
+	 */
 
 	void CorrectedApproach(double speed, double angle)
+	{
+		while(!RotateToAngle(angle)&&ShouldBeBreaching()){}
+		timer.Reset();
+		timer.Start();
+		while(((ahrs->GetRoll()>-6 &&speed<0) || (ahrs->GetRoll()<6&&speed>0 ))&& ShouldBeBreaching())
 		{
-			while(!RotateToAngle(angle)&&ShouldBeBreaching()){}
-			timer.Reset();
-			timer.Start();
-			while(((ahrs->GetRoll()>-6 &&speed<0) || (ahrs->GetRoll()<6&&speed>0 ))&& ShouldBeBreaching())
-			{
-				//We have not driven far enough, drive
+			//We have not driven far enough, drive
 
-				//Set a correction factor using the sine of our angle difference
-				double angleOffset = ahrs->GetYaw()-angle;
-				//sin will return a value equivalent to -1 at -90 deg, 0 at 0 deg, and 1 at 90 deg
-				//sin wants a value in radians, convert degrees to radians
-				//M_PI is the value of pi
-				angleOffset = angleOffset * M_PI/180.0;
+			//Set a correction factor using the sine of our angle difference
+			double angleOffset = ahrs->GetYaw()-angle;
+			//sin will return a value equivalent to -1 at -90 deg, 0 at 0 deg, and 1 at 90 deg
+			//sin wants a value in radians, convert degrees to radians
+			//M_PI is the value of pi
+			angleOffset = angleOffset * M_PI/180.0;
 
-				double correctionFactor = -sin(angleOffset);
-				double speedMult = speed*cos(angleOffset);
+			double correctionFactor = -sin(angleOffset);
+			double speedMult = speed*cos(angleOffset);
 
-				//Use correctionFactor as a turning argument for ArcadeDrive, also slow down if turned a lot
-				drive.ArcadeDrive(speedMult,correctionFactor*10);
-
-			}
-			timer.Stop();
-
-			drive.ArcadeDrive(0.,0);
+			//Use correctionFactor as a turning argument for ArcadeDrive, also slow down if turned a lot
+			drive.ArcadeDrive(speedMult,correctionFactor*10);
 
 		}
+		timer.Stop();
+
+		drive.ArcadeDrive(0.,0);
+
+	}
 
 
 	//This periodic function will drive the robot at an angle, correcting as needed
@@ -1295,7 +1298,7 @@ public:
 				else
 				{
 					//Increase angle
-					ShooterAngleToSpeed(-0.11);
+					ShooterAngleToSpeed(0);
 				}
 			}
 			else
