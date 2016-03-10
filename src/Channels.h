@@ -74,8 +74,8 @@ const static int BUT_ENCODERS_RESET = 6;
 
 //-----------------Specials Stick-------------------------
 const static int BUT_FIRE = 1;
-const static int BUT_SHOOTER_OUT = 3;
-const static int BUT_SHOOTER_IN = 2;
+const static int BUT_SHOOTER_OUT = 2;
+const static int BUT_SHOOTER_IN = 3;
 const static int BUT_AUTOAIMA = 4;
 const static int BUT_AUTOAIMB = 5;
 

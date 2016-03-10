@@ -69,10 +69,10 @@ public:
 	double ANGLE_TOLERANCE = 2;   //Degrees, how far can we be + or -
 
 	//--------------------------VISION CONSTANTS-------------------
-	int TARGET_ORIGIN_X = 287;
-	int TARGET_ORIGIN_Y = 396;
-	int ORIGIN_X_TOL = 10;
-	int ORIGIN_Y_TOL = 10;
+	int TARGET_ORIGIN_X = 292;
+	int TARGET_ORIGIN_Y = 295;
+	int ORIGIN_X_TOL = 15;
+	int ORIGIN_Y_TOL = 15;
 
 	Range RING_HUE_RANGE = {101, 225};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
@@ -81,7 +81,7 @@ public:
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	//-------------------MISC CONSTANTS-----------------------
-	double MAX_IN_SPEED = .5;
+	double MAX_IN_SPEED = .8;
 
 
 	//-----------------------MOTORS-------------------------
@@ -320,7 +320,7 @@ public:
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
 		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
-		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &session);
+		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
@@ -333,7 +333,7 @@ public:
 		}
 
 		//Open cam1
-		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &rearSession);
+		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
@@ -398,7 +398,7 @@ public:
 
 		//SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
 		//SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
-
+		/*
 		SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
 		SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
 		SmartDashboard::PutNumber("Roll",ahrs->GetRoll());
@@ -409,7 +409,7 @@ public:
 		SmartDashboard::PutNumber("Angle Encoder",angleMotor.GetEncPosition());
 
 		SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
-
+		 */
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
 		if(specials.GetRawButton(BUT_AUTOAIMA))
@@ -519,6 +519,8 @@ public:
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
+				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X,TARGET_ORIGIN_Y-70},{TARGET_ORIGIN_X,TARGET_ORIGIN_Y+70},0.0f);
+				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-70,TARGET_ORIGIN_Y},{TARGET_ORIGIN_X+70,TARGET_ORIGIN_Y},0.0f);
 
 				//Set image on camera server to frame
 				CameraServer::GetInstance()->SetImage(frame);
@@ -1024,25 +1026,13 @@ public:
 	{
 		DriverStation::ReportError("Breaching Portcullis");
 		//Turn around
-		ArmToAngle(2500);
-		while(!RotateToAngle(180)){}
+		ArmToAngle(2900);
 		CorrectedApproach(-1,180);
 		//Deploy arm
-		ArmToAngle(3000);
 		//Back up
-		drive.ArcadeDrive(-1.0,0);
-		Wait(0.25);
-		drive.ArcadeDrive(0.,0);
-		//Lift arm
-		armMain.Set(-1);
-		//Forward
-		drive.ArcadeDrive(0.25,0);
-		while(armMain.GetEncPosition()>2400){}
-		//Reverse
-		drive.ArcadeDrive(-1.,0);
-		while(armMain.GetEncPosition()>10){}
-		drive.ArcadeDrive(0.,0);
-		armMain.Set(0);
+		CorrectedDrive(0.8,180,3.5);
+		//Reset arm
+		ArmToAngle(100);
 	}
 
 	void BreachCheval()
@@ -1081,29 +1071,6 @@ public:
 	{
 		DriverStation::ReportError("Reaching Sally Port");
 		CorrectedApproach(-1,180);
-		//Turn around
-		//Extend arm & secondary arm
-		/*		ArmToAngle(1765);
-		armSecondary.Set(1);
-		Wait(0.3);
-		armSecondary.Set(0);
-		ApproachRampReverse();
-		ArmToAngle(2007);
-		//Pull door forward
-		drive.TankDrive(1.,0);
-		Wait(1);
-		//Spin around and move quick
-		drive.ArcadeDrive(0.,-1);
-		Wait(1);
-		while(!RotateToAngle(-25,1)){}
-		drive.ArcadeDrive(1.,0);
-		Wait(1);
-		drive.ArcadeDrive(0.,0);
-		//Stow Arm
-		armSecondary.Set(-1);
-		Wait(0.3);
-		armSecondary.Set(0);
-		ArmToAngle(10);*/
 	}
 
 	void BreachRockWall()
@@ -1129,14 +1096,17 @@ public:
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
-		ShooterToAngle(280);//Was 180
+		//ShooterToAngle(280);//Was 180
 		CorrectedApproach(1,0);
 		CorrectedDrive(0.7,0,3);
 	}
 
 	void BreachLowBarReverse()
 	{
-		ShooterToAngle(180);
+		//ShooterToAngle(-180);
+		angleMotor.Set(-1);
+		Wait(0.75);
+		angleMotor.Set(0);
 		while(!RotateToAngle(0)){}
 		CorrectedApproach(-1,0);
 		CorrectedDrive(-0.7,0,3);
@@ -1502,12 +1472,12 @@ public:
 		if(target<angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(0.5);
-			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && IsEnabled()){};
+			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && ShouldBeBreaching()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(-0.5);
-			while(target>angleMotor.GetEncPosition() && angleTop.Get() && IsEnabled()){};
+			while(target>angleMotor.GetEncPosition() && angleTop.Get() && ShouldBeBreaching()){};
 		}
 		ShooterAngleToSpeed(0);
 	}
@@ -1571,7 +1541,6 @@ public:
 	 *                         48 to go over
 	 *                   TOTAL: 313.11
 	 *
-	 *					Robot moves 67 in/sec approx
 	 *
 	 */
 };
