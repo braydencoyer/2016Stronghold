@@ -69,19 +69,19 @@ public:
 	double ANGLE_TOLERANCE = 2;   //Degrees, how far can we be + or -
 
 	//--------------------------VISION CONSTANTS-------------------
-	int TARGET_ORIGIN_X = 292;
-	int TARGET_ORIGIN_Y = 295;
+	int TARGET_ORIGIN_X = 333;
+	int TARGET_ORIGIN_Y = 307;
 	int ORIGIN_X_TOL = 15;
-	int ORIGIN_Y_TOL = 15;
+	int ORIGIN_Y_TOL = 18;
 
-	Range RING_HUE_RANGE = {101, 225};	//Default hue range for ring light, old=64
-	Range RING_SAT_RANGE = {200, 255};	//Default saturation range for ring light, old=88
-	Range RING_VAL_RANGE = {245, 255};	//Default value range for ring light old=230
-	float AREA_MINIMUM = 0.5; //Area minimum for particle as a percentage of total image area
+	Range RING_HUE_RANGE = {101, 155};	//Default hue range for ring light, old=64
+	Range RING_SAT_RANGE = {225, 255};	//Default saturation range for ring light, old=88
+	Range RING_VAL_RANGE = {240, 255};	//Default value range for ring light old=230
+	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	//-------------------MISC CONSTANTS-----------------------
-	double MAX_IN_SPEED = .8;
+	double MAX_IN_SPEED = .7;
 
 
 	//-----------------------MOTORS-------------------------
@@ -107,6 +107,8 @@ public:
 
 
 	//---------------------HUMAN INPUT-------------------
+
+	USBCamera usb;
 
 	//Driver
 	Joystick mainStick;
@@ -151,6 +153,8 @@ public:
 	//Info for switching the active camera
 	bool rearCamActive;
 	bool swapButtonPressed;
+
+	ParticleReport best;
 
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
@@ -214,6 +218,7 @@ public:
 		shooterB.SetInverted(false);
 		shooterA.SetInverted(true);
 		//shooterB.Set(10);
+		shooterB.SetFeedbackDevice(shooterB.QuadEncoder);
 
 
 		drive.SetInvertedMotor(drive.kRearLeftMotor,false);
@@ -398,18 +403,22 @@ public:
 
 		//SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
 		//SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
-		/*
-		SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
-		SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
-		SmartDashboard::PutNumber("Roll",ahrs->GetRoll());
 
-		SmartDashboard::PutNumber("Left Encoder",leftEnc.Get());
-		SmartDashboard::PutNumber("Right Encoder",rightEnc.Get());
+		if(!DriverStation::GetInstance().IsFMSAttached())
+		{
+			SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
+			SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
+			SmartDashboard::PutNumber("Roll",ahrs->GetRoll());
 
-		SmartDashboard::PutNumber("Angle Encoder",angleMotor.GetEncPosition());
+			SmartDashboard::PutNumber("Left Encoder",leftEnc.Get());
+			SmartDashboard::PutNumber("Right Encoder",rightEnc.Get());
 
-		SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
-		 */
+			SmartDashboard::PutNumber("Angle Encoder",angleMotor.GetEncPosition());
+
+			SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
+
+			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
+		}
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
 		if(specials.GetRawButton(BUT_AUTOAIMA))
@@ -592,7 +601,7 @@ public:
 		{
 			armMain.Set(mult);
 		}
-		else if(specials.GetRawButton(BUT_ARMMAIN_RV) || specials.GetRawButton(BUT_ARMSEC_FW))
+		else if(specials.GetRawButton(BUT_ARMMAIN_RV) || specials.GetRawButton(BUT_ARMSEC_RV))
 		{
 			armMain.Set(-mult);
 		}
@@ -1003,13 +1012,14 @@ public:
 	{
 		//Initial firing sequence
 		//Raise angle up
-		ShooterToAngle(1500);
+		ShooterToAngle(1200);
 	}
 
 	void AutonomousFire()
 	{
 		shooterA.Set(1);
 		shooterB.Set(1);
+		ShooterAngleToSpeed(0);
 		//Let motors spin up
 		Wait(1.5);
 
@@ -1030,7 +1040,7 @@ public:
 		CorrectedApproach(-1,180);
 		//Deploy arm
 		//Back up
-		CorrectedDrive(0.8,180,3.5);
+		CorrectedDrive(-1,180,4);
 		//Reset arm
 		ArmToAngle(100);
 	}
@@ -1041,7 +1051,7 @@ public:
 		feelers.Set(feelers.kForward);
 		CorrectedApproach(1,0);
 		ShooterToAngle(50);
-		CorrectedDrive(0.3,0,4);
+		CorrectedDrive(0.6,0,4);
 		feelers.Set(feelers.kReverse);
 	}
 
@@ -1050,7 +1060,7 @@ public:
 		DriverStation::ReportError("Breaching Moat");
 		CorrectedApproach(1,0);
 		//Just drive?
-		CorrectedDrive(1,0,2.5);
+		CorrectedDrive(1,0,2.8);
 	}
 
 	void BreachRamparts()
@@ -1090,7 +1100,7 @@ public:
 		DriverStation::ReportError("Breaching Rough Terrain");
 		//Just drive?
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,1.5);
+		CorrectedDrive(1,0,2);
 	}
 
 	void BreachLowBar()
@@ -1098,18 +1108,18 @@ public:
 		DriverStation::ReportError("Breaching Low Bar");
 		//ShooterToAngle(280);//Was 180
 		CorrectedApproach(1,0);
-		CorrectedDrive(0.7,0,3);
+		CorrectedDrive(1,0,2.7);
 	}
 
 	void BreachLowBarReverse()
 	{
-		//ShooterToAngle(-180);
+		ShooterToAngle(-100);
 		angleMotor.Set(-1);
 		Wait(0.75);
 		angleMotor.Set(0);
 		while(!RotateToAngle(0)){}
 		CorrectedApproach(-1,0);
-		CorrectedDrive(-0.7,0,3);
+		CorrectedDrive(-0.9,0,2.5);
 
 	}
 	/*----------------------------------------------------------------------
@@ -1171,7 +1181,7 @@ public:
 		while(!RotateToAngle(angle)&&ShouldBeBreaching()){}
 		timer.Reset();
 		timer.Start();
-		while(((ahrs->GetRoll()>-6 &&speed<0) || (ahrs->GetRoll()<6&&speed>0 ))&& ShouldBeBreaching())
+		while(ahrs->GetRoll()>-6 &&ahrs->GetRoll()&& ShouldBeBreaching())
 		{
 			//We have not driven far enough, drive
 
@@ -1244,6 +1254,12 @@ public:
 		//Process image, storing origin in screenPosX and screenPosY
 		Vision();
 
+		if(screenPosX==-1&&screenPosY==-1)
+		{
+			drive.ArcadeDrive(0.,-0.9);
+			return false;
+		}
+
 		//Check if target is in correct spot (within tolerance) already
 		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
@@ -1263,12 +1279,12 @@ public:
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Decrease angle
-					ShooterAngleToSpeed(0.27);
+					ShooterAngleToSpeed(0.18);
 				}
 				else
 				{
 					//Increase angle
-					ShooterAngleToSpeed(0);
+					ShooterAngleToSpeed(-0.09);
 				}
 			}
 			else
@@ -1281,14 +1297,14 @@ public:
 					{
 						//Turn right
 						drive.ArcadeDrive(0.0,0.48);
-						Wait(0.1);
+						Wait(0.08);
 						drive.ArcadeDrive(0.0,0.0);
 					}
 					else
 					{
 						//Turn left
 						drive.ArcadeDrive(0.0,-0.48);
-						Wait(0.1);
+						Wait(0.08);
 						drive.ArcadeDrive(0.0,0.0);
 					}
 				}
@@ -1400,7 +1416,7 @@ public:
 		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
 		imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
 
-		//Send particle count after filtering for size to dashboard
+		//Get array of particles
 		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
 
 		//Make sure we even have particles to look at (crash prevention)
@@ -1416,14 +1432,11 @@ public:
 					//Store index and area
 					bestArea=newParticleArea;
 					bestIndex=particleIndex;
-
 				}
 			}
 
-			ParticleReport best;
-
-			imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(best.PercentAreaToImageArea));
-			imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_AREA, &(best.Area));
+			//imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(best.PercentAreaToImageArea));
+			//imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_AREA, &(best.Area));
 			imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(best.BoundingRectTop));
 			imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(best.BoundingRectLeft));
 			imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(best.BoundingRectBottom));
@@ -1438,8 +1451,11 @@ public:
 
 
 		} else {
+
+			screenPosX=-1;
+			screenPosY=-1;
 			//Somehow, there were no particles big enough on the screen. This exists to stop a crash.
-			drive.ArcadeDrive(0.0,0.7);
+			//drive.ArcadeDrive(0.0,0.7);
 		}
 	}
 
@@ -1472,12 +1488,12 @@ public:
 		if(target<angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(0.5);
-			while(target<angleMotor.GetEncPosition() && angleBottom.Get() && ShouldBeBreaching()){};
+			while(target<angleMotor.GetEncPosition() && angleTop.Get() && ShouldBeBreaching()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(-0.5);
-			while(target>angleMotor.GetEncPosition() && angleTop.Get() && ShouldBeBreaching()){};
+			while(target>angleMotor.GetEncPosition() && angleBottom.Get() && ShouldBeBreaching()){};
 		}
 		ShooterAngleToSpeed(0);
 	}
