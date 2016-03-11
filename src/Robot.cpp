@@ -202,6 +202,8 @@ public:
 		//liftWinchSlave(CH_HANGB),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
+		camForward("cam1",false),
+		camReverse("cam0",false),
 		pdp(CH_PDP),
 		shifter(CH_SHIFTER_PCM,CH_SHIFTER_FW,CH_SHIFTER_RV),
 		feelers(CH_FORKA_PCM,CH_FORK_FW,CH_FORK_RV),
@@ -325,9 +327,6 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		camForward = USBCamera("cam1");
-		camReverse = USBCamera("cam0");
-
 		camForward.OpenCamera();
 		camReverse.OpenCamera();
 
@@ -359,13 +358,13 @@ public:
 		}
 */
 		//Starts the session we configured above
-		IMAQdxStartAcquisition(session);
+		/*IMAQdxStartAcquisition(session);
 		//IMAQdxStartAcquisition(rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("Configure session error: " + std::to_string((long)imaqError) + "\n");
 		}
-
+*/
 		rearCamActive = false;
 		swapButtonPressed = false;
 
@@ -493,17 +492,17 @@ public:
 
 			if(rearCamActive)
 			{
-				IMAQdxStopAcquisition(session);
-				IMAQdxUnconfigureAcquisition(session);
-				IMAQdxStartAcquisition(rearSession);
-				IMAQdxConfigureGrab(rearSession);
+				//IMAQdxStopAcquisition(session);
+				//IMAQdxUnconfigureAcquisition(session);
+				//IMAQdxStartAcquisition(rearSession);
+				//IMAQdxConfigureGrab(rearSession);
 			}
 			else
 			{
-				IMAQdxStopAcquisition(rearSession);
-				IMAQdxUnconfigureAcquisition(rearSession);
-				IMAQdxStartAcquisition(session);
-				IMAQdxConfigureGrab(session);
+				//IMAQdxStopAcquisition(rearSession);
+				//IMAQdxUnconfigureAcquisition(rearSession);
+				//IMAQdxStartAcquisition(session);
+				//IMAQdxConfigureGrab(session);
 			}
 		}
 		else
@@ -522,14 +521,14 @@ public:
 			if(rearCamActive)
 			{
 				//Get rear camera
-				IMAQdxGrab(rearSession,frame,false,NULL);
+				camReverse.GetImage(frame);
 				CameraServer::GetInstance()->SetImage(frame);
 			}
 			else
 			{
 				//Get front camera
 				//Get image
-				IMAQdxGrab(session, frame, false, NULL);
+				camForward.GetImage(frame);
 
 				//Draw a target on the frame
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
@@ -1351,7 +1350,7 @@ public:
 
 
 		//Retrieve an image from session, store into frame
-		IMAQdxGrab(session, frame, true, NULL);
+		camForward.GetImage(frame);
 		//Threshold the image looking for ring light color
 		imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
 
@@ -1414,7 +1413,7 @@ public:
 	void Vision()
 	{
 		//Retrieve an image from session, store into frame
-		IMAQdxGrab(session, frame, true, NULL);
+		camForward.GetImage(frame);
 		//Threshold the image looking for ring light color
 		imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
 
