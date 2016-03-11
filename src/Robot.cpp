@@ -110,8 +110,6 @@ public:
 
 	//---------------------HUMAN INPUT-------------------
 
-	USBCamera usb;
-
 	//Driver
 	Joystick mainStick;
 
