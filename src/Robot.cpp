@@ -330,6 +330,9 @@ public:
 		camForward.OpenCamera();
 		camReverse.OpenCamera();
 
+		camForward.StartCapture();
+		camReverse.StartCapture();
+
 
 		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
 		/*imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
