@@ -108,8 +108,6 @@ public:
 
 	//---------------------HUMAN INPUT-------------------
 
-	USBCamera usb;
-
 	//Driver
 	Joystick mainStick;
 
@@ -139,10 +137,10 @@ public:
 	ParticleFilterOptions2 filterOptions = {0,0,1,1};
 
 	//IMAQ storage
-	IMAQdxSession session;
+	//IMAQdxSession session;
 	int imaqError;
 
-	IMAQdxSession rearSession;
+	//IMAQdxSession rearSession;
 
 	//Position of target on-screen, to be used later.
 	double screenPosX;
@@ -155,6 +153,9 @@ public:
 	bool swapButtonPressed;
 
 	ParticleReport best;
+
+	USBCamera camForward;
+	USBCamera camReverse;
 
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
@@ -324,8 +325,15 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
+		camForward = USBCamera("cam1");
+		camReverse = USBCamera("cam0");
+
+		camForward.OpenCamera();
+		camReverse.OpenCamera();
+
+
 		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
-		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
+		/*imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
@@ -349,7 +357,7 @@ public:
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxConfigureGrab 2 error: " + std::to_string((long)imaqError) + "\n");
 		}
-
+*/
 		//Starts the session we configured above
 		IMAQdxStartAcquisition(session);
 		//IMAQdxStartAcquisition(rearSession);
