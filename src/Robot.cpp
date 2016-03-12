@@ -329,6 +329,11 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
+		camForward.SetBrightness(10);
+		camForward.SetExposureManual(10);
+		//camForward.SetWhiteBalanceManual(0);
+		//camForward.UpdateSettings();
+
 		StartForwardCamera();
 
 
@@ -1456,10 +1461,7 @@ public:
 	{
 		camReverse.StopCapture();
 
-		camForward.SetBrightness(0);
-		camForward.SetExposureManual(100);
-		//camForward.SetWhiteBalanceManual(0);
-		camForward.UpdateSettings();
+
 		camForward.StartCapture();
 	}
 
@@ -1467,10 +1469,7 @@ public:
 	{
 		camForward.StopCapture();
 
-		camReverse.SetBrightness(10);
-		//camReverse.SetExposureManual(50);
-		//camReverse.SetWhiteBalanceManual(0);
-		camReverse.UpdateSettings();
+		//camReverse.UpdateSettings();
 
 		camReverse.StartCapture();
 	}
