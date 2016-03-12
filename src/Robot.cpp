@@ -401,6 +401,8 @@ public:
 			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
 
 			SmartDashboard::PutBoolean("Rear Cam",rearCamActive);
+
+			SmartDashboard::PutBoolean("Brightness",camReverse.GetBrightness());
 		}
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
@@ -498,8 +500,6 @@ public:
 			}
 			else
 			{
-				camForward.SetBrightness(0);
-						camForward.SetExposureManual(100);
 				//Get front camera
 				//Get image
 				camForward.GetImage(frame);
