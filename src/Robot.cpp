@@ -1026,7 +1026,7 @@ public:
 		DriverStation::ReportError("Breaching Moat");
 		CorrectedApproach(1,0);
 		//Just drive?
-		CorrectedDrive(1,0,2.8);
+		CorrectedDrive(1,0,3);
 	}
 
 	void BreachRamparts()
@@ -1034,7 +1034,7 @@ public:
 		DriverStation::ReportError("Breaching Ramparts");
 		//Just drive?
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,1.5);
+		CorrectedDrive(1,0,2.2);
 	}
 
 	void BreachDrawbridge()
