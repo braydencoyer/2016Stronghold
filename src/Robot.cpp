@@ -327,47 +327,9 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		camForward.OpenCamera();
-		camReverse.OpenCamera();
-
-		camForward.StartCapture();
-		camReverse.StartCapture();
+		StartForwardCamera();
 
 
-		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
-		/*imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
-		if(imaqError != IMAQdxErrorSuccess) {
-			//Warn drivers that camera is dead
-			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
-		}
-		imaqError = IMAQdxConfigureGrab(session);
-
-		if(imaqError != IMAQdxErrorSuccess) {
-			//Tell drivers that we can't load the camera
-			DriverStation::ReportError("IMAQdxConfigureGrab error: " + std::to_string((long)imaqError) + "\n");
-		}
-
-		//Open cam1
-		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &rearSession);
-		if(imaqError != IMAQdxErrorSuccess) {
-			//Warn drivers that camera is dead
-			DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
-		}
-		//Configure the Grab session. Returns a number other than IMAQdxErrorSuccess if something bad happens.
-		//imaqError = IMAQdxConfigureGrab(rearSession);
-		if(imaqError != IMAQdxErrorSuccess) {
-			//Warn drivers that camera is dead
-			DriverStation::ReportError("IMAQdxConfigureGrab 2 error: " + std::to_string((long)imaqError) + "\n");
-		}
-*/
-		//Starts the session we configured above
-		/*IMAQdxStartAcquisition(session);
-		//IMAQdxStartAcquisition(rearSession);
-		if(imaqError != IMAQdxErrorSuccess) {
-			//Warn drivers that camera is dead
-			DriverStation::ReportError("Configure session error: " + std::to_string((long)imaqError) + "\n");
-		}
-*/
 		rearCamActive = false;
 		swapButtonPressed = false;
 
@@ -428,6 +390,8 @@ public:
 			SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
 
 			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
+
+			SmartDashboard::PutBoolean("Rear Cam",rearCamActive);
 		}
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
@@ -495,17 +459,13 @@ public:
 
 			if(rearCamActive)
 			{
-				//IMAQdxStopAcquisition(session);
-				//IMAQdxUnconfigureAcquisition(session);
-				//IMAQdxStartAcquisition(rearSession);
-				//IMAQdxConfigureGrab(rearSession);
+				StartReverseCamera();
+				cycle=-20;
 			}
 			else
 			{
-				//IMAQdxStopAcquisition(rearSession);
-				//IMAQdxUnconfigureAcquisition(rearSession);
-				//IMAQdxStartAcquisition(session);
-				//IMAQdxConfigureGrab(session);
+				StartForwardCamera();
+				cycle=-20;
 			}
 		}
 		else
@@ -529,11 +489,13 @@ public:
 			}
 			else
 			{
+				camForward.SetBrightness(0);
+						camForward.SetExposureManual(100);
 				//Get front camera
 				//Get image
 				camForward.GetImage(frame);
-
 				//Draw a target on the frame
+				//imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{1,1},{100,100},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
@@ -1485,6 +1447,30 @@ public:
 	{
 		//we want descending sort order
 		return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
+	}
+
+
+	void StartForwardCamera()
+	{
+		camReverse.StopCapture();
+
+		camForward.SetBrightness(0);
+		camForward.SetExposureManual(100);
+		//camForward.SetWhiteBalanceManual(0);
+		camForward.UpdateSettings();
+		camForward.StartCapture();
+	}
+
+	void StartReverseCamera()
+	{
+		camForward.StopCapture();
+
+		camReverse.SetBrightness(10);
+		//camReverse.SetExposureManual(50);
+		//camReverse.SetWhiteBalanceManual(0);
+		camReverse.UpdateSettings();
+
+		camReverse.StartCapture();
 	}
 
 	/* -------------------------------------------------------------------
