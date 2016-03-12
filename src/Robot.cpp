@@ -329,8 +329,10 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		camForward.SetBrightness(10);
-		camForward.SetExposureManual(10);
+		//camForward.SetBrightness(10);
+		//camForward.SetExposureManual(10);
+
+
 		//camForward.SetWhiteBalanceManual(0);
 		//camForward.UpdateSettings();
 
