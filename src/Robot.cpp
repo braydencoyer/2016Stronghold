@@ -1034,7 +1034,7 @@ public:
 		DriverStation::ReportError("Breaching Ramparts");
 		//Just drive?
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,2.2);
+		CorrectedDrive(1,0,2.8);
 	}
 
 	void BreachDrawbridge()
