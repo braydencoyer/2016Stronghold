@@ -702,7 +702,7 @@ public:
 	//-------------------Switchers-------------------------
 	void AutonomousPeriodic()
 	{
-		if(autoSelected==AUTO_MODE_FULL || autoSelected==AUTO_MODE_DOUBLELB)
+		if(autoSelected==AUTO_MODE_BREACH || autoSelected==AUTO_MODE_FULL || autoSelected==AUTO_MODE_DOUBLELB)
 		{
 			//--------------------------Full Auto--------------------------
 			//Switch case based on current autoState
@@ -722,6 +722,11 @@ public:
 			}
 			case 2:
 			{
+				if(autoSelected==AUTO_MODE_BREACH)
+				{
+					autoState=7;
+					break;
+				}
 				//AutonomousClearDefense();
 				AutonomousRaise();
 				autoState++;
@@ -767,45 +772,6 @@ public:
 		}
 
 		//-------------------Testing Functions------------------------
-		else if(autoSelected==AUTO_MODE_BREACH)
-		{
-			//Breach only
-			switch(autoState)
-			{
-			case 0: {
-				AutonomousRaise();
-				autoState++;
-				break;
-			}
-			case 1: {
-				Breach(breachPos);
-				autoState++;
-				break;
-			}
-			case 2: {
-				//Done
-				drive.ArcadeDrive(0.0,0);
-				break;
-			}
-			}
-		}
-		else if(autoSelected==AUTO_MODE_APPROACH)
-		{
-			//Breach only
-			switch(autoState)
-			{
-			case 0: {
-				CorrectedApproach(1,0);
-				autoState++;
-				break;
-			}
-			case 1: {
-				//Done
-				drive.ArcadeDrive(0.0,0);
-				break;
-			}
-			}
-		}
 		else if(autoSelected==AUTO_MODE_APPROACH_RV)
 		{
 			//Breach only
@@ -1041,7 +1007,7 @@ public:
 		DriverStation::ReportError("Breaching Moat");
 		CorrectedApproach(1,0);
 		//Just drive?
-		CorrectedDrive(1,0,2.8);
+		CorrectedDrive(1,0,3);
 	}
 
 	void BreachRamparts()
@@ -1049,7 +1015,7 @@ public:
 		DriverStation::ReportError("Breaching Ramparts");
 		//Just drive?
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,1.5);
+		CorrectedDrive(1,0,2.8);
 	}
 
 	void BreachDrawbridge()
@@ -1080,8 +1046,12 @@ public:
 	{
 		DriverStation::ReportError("Breaching Rough Terrain");
 		//Just drive?
+		drive.ArcadeDrive(1.,0);
+		Wait(0.1);
+		shifter.Set(shifter.kForward);
 		CorrectedApproach(1,0);
 		CorrectedDrive(1,0,2);
+		shifter.Set(shifter.kReverse);
 	}
 
 	void BreachLowBar()
