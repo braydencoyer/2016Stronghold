@@ -4,7 +4,6 @@
 #include "AHRS.h"
 #include "Channels.h"
 #include "LimitSwitch.cpp"
-//#include <chrono>
 
 class Robot: public IterativeRobot
 {
@@ -16,8 +15,6 @@ public:
 	 */
 
 	LiveWindow *lw = LiveWindow::GetInstance();
-
-	//std::chrono::time_point<std::chrono::system_clock> start,end;
 
 	//----------------------------AUTO MODE CONSTANTS-------------------
 	//Thsese strings represent possible SmartDashboard auto modes/states/etc.
@@ -71,10 +68,10 @@ public:
 	double ANGLE_TOLERANCE = 2;   //Degrees, how far can we be + or -
 
 	//--------------------------VISION CONSTANTS-------------------
-	int TARGET_ORIGIN_X = 333;
-	int TARGET_ORIGIN_Y = 307;
-	int ORIGIN_X_TOL = 15;
-	int ORIGIN_Y_TOL = 18;
+	int TARGET_ORIGIN_X = 80;
+	int TARGET_ORIGIN_Y = 60;
+	int ORIGIN_X_TOL = 8;
+	int ORIGIN_Y_TOL = 10;
 
 	Range RING_HUE_RANGE = {101, 155};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {225, 255};	//Default saturation range for ring light, old=88
@@ -83,7 +80,7 @@ public:
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	//-------------------MISC CONSTANTS-----------------------
-	double MAX_IN_SPEED = .7;
+	double MAX_IN_SPEED = .8;
 
 
 	//-----------------------MOTORS-------------------------
@@ -94,13 +91,9 @@ public:
 	CANTalon shooterB;
 	CANTalon angleMotor;
 	//One rotation: 9124
-	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1; //Voltage percent needed to hold shooter in place
+	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.05; //Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
-	//Victor armSecondary;
-
-	//CANTalon liftWinch;
-	//CANTalon liftWinchSlave;
 
 	//----------------------SENSORS---------------------
 
@@ -139,10 +132,7 @@ public:
 	ParticleFilterOptions2 filterOptions = {0,0,1,1};
 
 	//IMAQ storage
-	//IMAQdxSession session;
 	int imaqError;
-
-	//IMAQdxSession rearSession;
 
 	//Position of target on-screen, to be used later.
 	double screenPosX;
@@ -199,9 +189,6 @@ public:
 		shooterB(CH_SHOOTERB),
 		angleMotor(CH_ANGLEMOTOR),
 		armMain(CH_ARMMAIN),
-		//armSecondary(CH_ARMSECONDARY),
-		//liftWinch(CH_HANGA),
-		//liftWinchSlave(CH_HANGB),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		camForward("cam1",false),
@@ -219,10 +206,8 @@ public:
 	{
 
 		//--------Motor inversion----------------
-		//shooterB.SetControlMode(CANSpeedController::kFollower);
 		shooterB.SetInverted(false);
 		shooterA.SetInverted(true);
-		//shooterB.Set(10);
 		shooterB.SetFeedbackDevice(shooterB.QuadEncoder);
 
 
@@ -231,13 +216,6 @@ public:
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
 		angleMotor.SetInverted(true);
-		//angleMotor.SetControlMode(angleMotor.kPosition);
-		//angleMotor.ConfigEncoderCodesPerRev(1475);
-		//angleMotor.SetCloseLoopRampRate(0.25);
-		//angleMotor.SetPID(0.5,0,0);
-
-		//liftWinchSlave.SetControlMode(CANSpeedController::kFollower);
-		//liftWinchSlave.Set(CH_HANGA);
 	}
 
 
@@ -329,15 +307,31 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		//camForward.SetBrightness(10);
-		//camForward.SetExposureManual(10);
+		DriverStation::ReportError("Starting Camera Configuration...");
+		DriverStation::ReportError("Setting brightness...");
+		camForward.SetBrightness(10);
+		Wait(0.5);
+		DriverStation::ReportError("Uploading setting...");
+		camForward.UpdateSettings();
+		Wait(0.5);
 
+		DriverStation::ReportError("Setting exposure...");
+		camForward.SetExposureManual(10);
+		Wait(0.5);
+		DriverStation::ReportError("Uploading setting...");
+		camForward.UpdateSettings();
+		Wait(0.5);
 
-		//camForward.SetWhiteBalanceManual(0);
-		//camForward.UpdateSettings();
+		DriverStation::ReportError("Setting White Balance...");
+		camForward.SetWhiteBalanceManual(0);
+		Wait(0.5);
+		DriverStation::ReportError("Uploading setting...");
+		camForward.UpdateSettings();
+		Wait(0.5);
 
-		StartForwardCamera();
-
+		DriverStation::ReportError("Configured. Brightness is: "+camForward.GetBrightness());
+		//StartForwardCamera();
+		camForward.StartCapture();
 
 		rearCamActive = false;
 		swapButtonPressed = false;
@@ -370,21 +364,13 @@ public:
 	//Called when Teleop starts
 	void TeleopInit()
 	{
-		//end = std::chrono::system_clock::now();
+
 	}
 
 	//Called repeatedly while Teleop is active
 	void TeleopPeriodic()
 	{
-		//All this stuff is debug output statements. TODO COMMENT OUT FOR COMPETITION!!!
-		//start = std::chrono::system_clock::now();
-		//std::chrono::duration<double> elapsed_seconds = start-end;
-		//end=start;
-		//SmartDashboard::PutNumber("Periodic:",elapsed_seconds.count());
-
-		//SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
-		//SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
-
+		//Testing data, disabled when FMS attached (on field)
 		if(!DriverStation::GetInstance().IsFMSAttached())
 		{
 			SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
@@ -504,7 +490,6 @@ public:
 				//Get image
 				camForward.GetImage(frame);
 				//Draw a target on the frame
-				//imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{1,1},{100,100},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y-ORIGIN_Y_TOL},{TARGET_ORIGIN_X+ORIGIN_X_TOL,TARGET_ORIGIN_Y+ORIGIN_Y_TOL},0.0f);
@@ -590,40 +575,6 @@ public:
 		{
 			armMain.Set(0);
 		}
-
-		/*if(specials.GetRawButton(BUT_ARMSEC_FW))
-		{
-			armSecondary.SetSpeed(mult);
-		}
-		else if(specials.GetRawButton(BUT_ARMSEC_RV))
-		{
-			armSecondary.SetSpeed(-mult);
-		}
-		else
-		{
-			armSecondary.SetSpeed(0);
-		}*/
-
-		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
-		//SmartDashboard::PutNumber("Code Time:",elapsed_seconds1.count());
-
-		/*
-		//--------------------Hang-------------------------
-		//Use POV switch for hang motors. TODO Remove if not on production robot
-		int pov = mainStick.GetPOV(0);
-		if(pov==315||pov==0||pov==45)
-		{
-			liftWinch.Set(1);
-		}
-		else if(pov==135||pov==180||pov==225)
-		{
-			liftWinch.Set(-1);
-		}
-		else
-		{
-			liftWinch.Set(0);
-		}
-		 */
 	}
 
 
@@ -647,7 +598,7 @@ public:
 		armMain.Set(0);
 		//armSecondary.Set(0);
 
-		//Reset pneumatics (remove if needed)
+		//Reset pneumatics
 		shootyStick.Set(shootyStick.kReverse);
 		feelers.Set(feelers.kReverse);
 		shifter.Set(shifter.kReverse);
@@ -682,8 +633,6 @@ public:
 		{
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
-
-		//ZeroShooter();
 
 		//Re zero NavX in case it drifted while stationary
 		//NOTE: THIS IS NOT RECALIBRATION.
@@ -727,7 +676,6 @@ public:
 					autoState=7;
 					break;
 				}
-				//AutonomousClearDefense();
 				AutonomousRaise();
 				autoState++;
 				break;
@@ -741,7 +689,7 @@ public:
 			case 4:
 			{
 				//Confirm & adjust using vision
-				if(!AutoAim()) break;
+				AutoAimHardLoop();
 				autoState++;
 				break;
 			}
@@ -812,7 +760,7 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-				if(!AutoAim()) break;
+				AutoAimHardLoop();
 				autoState++;
 				break;
 			}
@@ -1109,23 +1057,6 @@ public:
 		}
 		return false;
 	}
-	/*
-	void ApproachRampForward(double speed = 1)
-	{
-		while(!RotateToAngle(0) && ShouldBeBreaching()){}
-		drive.TankDrive(speed-0.08,speed);
-		while(ahrs->GetRoll()<6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(0.,0);
-	}
-
-	void ApproachRampReverse(double speed = 1)
-	{
-		while(!RotateToAngle(180) && ShouldBeBreaching()){}
-		drive.ArcadeDrive(-speed,0);
-		while(ahrs->GetRoll()>-6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(0.,0);
-	}
-	 */
 
 	void CorrectedApproach(double speed, double angle)
 	{
@@ -1194,6 +1125,7 @@ public:
 	 * ----------------------------------------------------------------------
 	 */
 
+	//As small as 20ms plus loop execution seems, it is too much. Skip it.
 	bool AutoAimHardLoop()
 	{
 		while(!AutoAim() && (specials.GetRawButton(BUT_AUTOAIMA) || IsAutonomous())){};
@@ -1207,6 +1139,7 @@ public:
 
 		if(screenPosX==-1&&screenPosY==-1)
 		{
+			//No target, spin to find it
 			drive.ArcadeDrive(0.,-0.9);
 			return false;
 		}
@@ -1235,7 +1168,7 @@ public:
 				else
 				{
 					//Increase angle
-					ShooterAngleToSpeed(-0.09);
+					ShooterAngleToSpeed(-0.1);
 				}
 			}
 			else
@@ -1350,7 +1283,7 @@ public:
 
 
 		} else {
-			//Somehow, there were no particles on the screen. This exists to stop a crash (vecotor index out of bounds)
+			//Somehow, there were no particles on the screen. This exists to stop a crash (vector index out of bounds)
 		}
 	}
 
@@ -1358,7 +1291,7 @@ public:
 	{
 		//Retrieve an image from session, store into frame
 		camForward.GetImage(frame);
-		//Threshold the image looking for ring light color
+		//Threshold the image looking for ring light color. Faster when majority of image is too dark
 		imaqError = imaqColorThreshold(binaryFrame, frame, 255, IMAQ_HSV, &RING_HUE_RANGE, &RING_SAT_RANGE, &RING_VAL_RANGE);
 
 		//Count particles in the image
@@ -1386,6 +1319,7 @@ public:
 				}
 			}
 
+			//Unused data, commented out to speed things up
 			//imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &(best.PercentAreaToImageArea));
 			//imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_AREA, &(best.Area));
 			imaqMeasureParticle(binaryFrame, bestIndex, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(best.BoundingRectTop));
@@ -1397,16 +1331,11 @@ public:
 			screenPosX = (best.BoundingRectRight+best.BoundingRectLeft)/2;
 			screenPosY = (best.BoundingRectBottom+best.BoundingRectTop)/2;
 
-			//SmartDashboard::PutNumber("Target X", screenPosX);
-			//SmartDashboard::PutNumber("Target Y", screenPosY);
-
-
 		} else {
 
 			screenPosX=-1;
 			screenPosY=-1;
-			//Somehow, there were no particles big enough on the screen. This exists to stop a crash.
-			//drive.ArcadeDrive(0.0,0.7);
+			//Somehow, there were no particles big enough on the screen. Keep looking...
 		}
 	}
 
@@ -1433,15 +1362,12 @@ public:
 	{
 		camReverse.StopCapture();
 
-
 		camForward.StartCapture();
 	}
 
 	void StartReverseCamera()
 	{
 		camForward.StopCapture();
-
-		//camReverse.UpdateSettings();
 
 		camReverse.StartCapture();
 	}
@@ -1516,18 +1442,6 @@ public:
 		return (IsAutonomous()&&IsEnabled())||(mainStick.GetRawButton(BUT_BREACH2)||mainStick.GetRawButton(BUT_BREACH3)||mainStick.GetRawButton(BUT_BREACH4)||mainStick.GetRawButton(BUT_BREACH5));
 	}
 
-	//---------------MEASUREMENTS------------------
-	//Defences are 47.34 accross on floor, 48 in total distance over
-	/*
-	 *     |                   |           |                                 |
-	 *     |                   |           |                                 |
-	 *     |                   |           |                                 |
-	 *  AutoLine     74.27   Def: 47.34 floor,         191.5                Wall
-	 *                         48 to go over
-	 *                   TOTAL: 313.11
-	 *
-	 *
-	 */
 };
 
 START_ROBOT_CLASS(Robot)
