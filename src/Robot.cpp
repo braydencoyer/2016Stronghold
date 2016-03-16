@@ -230,13 +230,9 @@ public:
 		angleMotor.SetEncPosition(0);
 
 		armMain.SetSafetyEnabled(false);
-		//armSecondary.SetSafetyEnabled(false);
 		//--------------NAVX-MXP-------------------
 		//Try to instantiate navx. If it fails, catch error so code doesn't crash.
 		try {
-			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
-			/* Alternatively:  I2C::Port::kMXP, SerialPort::Port::kMXP or SerialPort::Port::kUSB */
-			/* See http://navx-mxp.kauailabs.com/guidance/selecting-an-interface/ for details.   */
 			ahrs = new AHRS(SPI::Port::kMXP);
 		} catch (std::exception ex) {
 			std::string err_string = "Error instantiating navX MXP:  ";
@@ -307,29 +303,32 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		DriverStation::ReportError("Starting Camera Configuration...");
-		DriverStation::ReportError("Setting brightness...");
-		camForward.SetBrightness(10);
-		Wait(0.5);
-		DriverStation::ReportError("Uploading setting...");
+		//Configure camera- execution needs to wait for camera to update properly each time
+		//DriverStation::ReportError("Starting Camera Configuration...");
+		//DriverStation::ReportError("Setting brightness...");
+		camForward.SetBrightness(5);
+		Wait(2);
+		//DriverStation::ReportError("Uploading BN setting...");
 		camForward.UpdateSettings();
+		Wait(2);
+
+		camForward.OpenCamera();
+
+		//DriverStation::ReportError("Setting exposure...");
+//		camForward.SetExposureManual(10);
+		Wait(2);
+		//DriverStation::ReportError("Uploading Exp setting...");
+		camForward.UpdateSettings();
+		Wait(2);
+
+		//DriverStation::ReportError("Setting White Balance...");
+//		camForward.SetWhiteBalanceManual(50);
+		Wait(0.5);
+		//DriverStation::ReportError("Uploading WB setting...");
+		//camForward.UpdateSettings();
 		Wait(0.5);
 
-		DriverStation::ReportError("Setting exposure...");
-		camForward.SetExposureManual(10);
-		Wait(0.5);
-		DriverStation::ReportError("Uploading setting...");
-		camForward.UpdateSettings();
-		Wait(0.5);
-
-		DriverStation::ReportError("Setting White Balance...");
-		camForward.SetWhiteBalanceManual(0);
-		Wait(0.5);
-		DriverStation::ReportError("Uploading setting...");
-		camForward.UpdateSettings();
-		Wait(0.5);
-
-		DriverStation::ReportError("Configured. Brightness is: "+camForward.GetBrightness());
+//		DriverStation::ReportError("Configured. Brightness is: "+camForward.GetBrightness());
 		//StartForwardCamera();
 		camForward.StartCapture();
 
@@ -348,6 +347,8 @@ public:
 		SmartDashboard::PutNumber("X Tol", ORIGIN_X_TOL);
 		SmartDashboard::PutNumber("Y Tol", ORIGIN_Y_TOL);
 
+
+		SmartDashboard::PutNumber("Br",-1);
 
 		//-------------Encoders--------------
 		//Reset all encoders if Talon power has not cycled
@@ -388,7 +389,7 @@ public:
 
 			SmartDashboard::PutBoolean("Rear Cam",rearCamActive);
 
-			SmartDashboard::PutBoolean("Brightness",camReverse.GetBrightness());
+			SmartDashboard::PutNumber("Brightness2",camForward.GetBrightness());
 		}
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
@@ -481,6 +482,7 @@ public:
 			if(rearCamActive)
 			{
 				//Get rear camera
+				camForward.SetBrightness(SmartDashboard::GetNumber("Br",-1));
 				camReverse.GetImage(frame);
 				CameraServer::GetInstance()->SetImage(frame);
 			}
