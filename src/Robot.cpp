@@ -82,6 +82,10 @@ public:
 	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
+	int CAMERA_BRIGHTNESS = 1;
+	int CAMERA_WHITEBALANCE = 4500;
+	int CAMERA_EXPOSURE = 10;
+
 	//-------------------MISC CONSTANTS-----------------------
 	double MAX_IN_SPEED = .7;
 
@@ -97,10 +101,6 @@ public:
 	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1; //Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
-	//Victor armSecondary;
-
-	//CANTalon liftWinch;
-	//CANTalon liftWinchSlave;
 
 	//----------------------SENSORS---------------------
 
@@ -141,6 +141,14 @@ public:
 	//IMAQ storage
 	IMAQdxSession session;
 	int imaqError;
+
+	const char* ATTR_VIDEO_MODE = "AcquisitionAttributes::VideoMode";
+	const char* ATTR_WB_MODE = "CameraAttributes::WhiteBalance::Mode";
+	const char* ATTR_WB_VALUE = "CameraAttributes::WhiteBalance::Value";
+	const char* ATTR_EX_MODE = "CameraAttributes::Exposure::Mode";
+	const char* ATTR_EX_VALUE = "CameraAttributes::Exposure::Value";
+	const char* ATTR_BR_MODE = "CameraAttributes::Brightness::Mode";
+	const char* ATTR_BR_VALUE = "CameraAttributes::Brightness::Value";
 
 	IMAQdxSession rearSession;
 
@@ -196,9 +204,6 @@ public:
 		shooterB(CH_SHOOTERB),
 		angleMotor(CH_ANGLEMOTOR),
 		armMain(CH_ARMMAIN),
-		//armSecondary(CH_ARMSECONDARY),
-		//liftWinch(CH_HANGA),
-		//liftWinchSlave(CH_HANGB),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
@@ -373,6 +378,9 @@ public:
 		SmartDashboard::PutNumber("X Tol", ORIGIN_X_TOL);
 		SmartDashboard::PutNumber("Y Tol", ORIGIN_Y_TOL);
 
+		SmartDashboard::PutNumber("BrightnessTarget",CAMERA_BRIGHTNESS);
+		SmartDashboard::PutNumber("WhiteBalanceTarget",CAMERA_WHITEBALANCE);
+		SmartDashboard::PutNumber("ExposureTarget",CAMERA_EXPOSURE);
 
 		//-------------Encoders--------------
 		//Reset all encoders if Talon power has not cycled
@@ -395,15 +403,6 @@ public:
 	//Called repeatedly while Teleop is active
 	void TeleopPeriodic()
 	{
-		//All this stuff is debug output statements. TODO COMMENT OUT FOR COMPETITION!!!
-		//start = std::chrono::system_clock::now();
-		//std::chrono::duration<double> elapsed_seconds = start-end;
-		//end=start;
-		//SmartDashboard::PutNumber("Periodic:",elapsed_seconds.count());
-
-		//SmartDashboard::PutNumber("Forward Speed",mainStick.GetY());
-		//SmartDashboard::PutNumber("Angle Motor Percent",specials.GetY());
-
 		if(!DriverStation::GetInstance().IsFMSAttached())
 		{
 			SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
@@ -418,6 +417,32 @@ public:
 			SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
 
 			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
+			int val = -1;
+			IMAQdxGetAttributeMinimum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Min brightness",val);
+			IMAQdxGetAttributeMaximum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Max brightness",val);
+
+			IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Min Exposure",val);
+			IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Max Exposure",val);
+
+			IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Min White Balance",val);
+			IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Max White Balance",val);
+
+			IMAQdxGetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("brightness",val);
+
+			IMAQdxGetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("White Balance",val);
+
+			IMAQdxGetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
+			SmartDashboard::PutNumber("Exposure",val);
+
+
 		}
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
@@ -494,6 +519,7 @@ public:
 			{
 				IMAQdxStopAcquisition(rearSession);
 				IMAQdxUnconfigureAcquisition(rearSession);
+				SetUpCamera();
 				IMAQdxStartAcquisition(session);
 				IMAQdxConfigureGrab(session);
 			}
@@ -609,40 +635,6 @@ public:
 		{
 			armMain.Set(0);
 		}
-
-		/*if(specials.GetRawButton(BUT_ARMSEC_FW))
-		{
-			armSecondary.SetSpeed(mult);
-		}
-		else if(specials.GetRawButton(BUT_ARMSEC_RV))
-		{
-			armSecondary.SetSpeed(-mult);
-		}
-		else
-		{
-			armSecondary.SetSpeed(0);
-		}*/
-
-		//std::chrono::duration<double> elapsed_seconds1 = std::chrono::system_clock::now()-start;
-		//SmartDashboard::PutNumber("Code Time:",elapsed_seconds1.count());
-
-		/*
-		//--------------------Hang-------------------------
-		//Use POV switch for hang motors. TODO Remove if not on production robot
-		int pov = mainStick.GetPOV(0);
-		if(pov==315||pov==0||pov==45)
-		{
-			liftWinch.Set(1);
-		}
-		else if(pov==135||pov==180||pov==225)
-		{
-			liftWinch.Set(-1);
-		}
-		else
-		{
-			liftWinch.Set(0);
-		}
-		 */
 	}
 
 
@@ -1128,23 +1120,6 @@ public:
 		}
 		return false;
 	}
-	/*
-	void ApproachRampForward(double speed = 1)
-	{
-		while(!RotateToAngle(0) && ShouldBeBreaching()){}
-		drive.TankDrive(speed-0.08,speed);
-		while(ahrs->GetRoll()<6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(0.,0);
-	}
-
-	void ApproachRampReverse(double speed = 1)
-	{
-		while(!RotateToAngle(180) && ShouldBeBreaching()){}
-		drive.ArcadeDrive(-speed,0);
-		while(ahrs->GetRoll()>-6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(0.,0);
-	}
-	 */
 
 	void CorrectedApproach(double speed, double angle)
 	{
@@ -1447,12 +1422,22 @@ public:
 		return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
 	}
 
+	void SetUpCamera()
+	{
+		IMAQdxSetAttribute(session,ATTR_BR_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
+		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,SmartDashboard::GetNumber("BrightnessTarget",0));
+		IMAQdxSetAttribute(session,ATTR_WB_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
+		IMAQdxSetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,SmartDashboard::GetNumber("WhiteBalanceTarget",0));
+		IMAQdxSetAttribute(session,ATTR_EX_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
+		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,SmartDashboard::GetNumber("ExposureTarget",0));
+	}
+
 	/* -------------------------------------------------------------------
 	 * 							Encoder Stuff
 	 * -------------------------------------------------------------------
 	 */
 
-	void ShooterToAngle(int target)
+ 	void ShooterToAngle(int target)
 	{
 		target=-target;
 		if(target<angleMotor.GetEncPosition())
