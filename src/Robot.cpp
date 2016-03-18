@@ -142,13 +142,14 @@ public:
 	IMAQdxSession session;
 	int imaqError;
 
-	const char* ATTR_VIDEO_MODE = "AcquisitionAttributes::VideoMode";
-	const char* ATTR_WB_MODE = "CameraAttributes::WhiteBalance::Mode";
-	const char* ATTR_WB_VALUE = "CameraAttributes::WhiteBalance::Value";
-	const char* ATTR_EX_MODE = "CameraAttributes::Exposure::Mode";
-	const char* ATTR_EX_VALUE = "CameraAttributes::Exposure::Value";
-	const char* ATTR_BR_MODE = "CameraAttributes::Brightness::Mode";
-	const char* ATTR_BR_VALUE = "CameraAttributes::Brightness::Value";
+	//Register display names for our usb cameras
+	const char* ATTR_VIDEO_MODE = "AcquisitionAttributes::VideoMode";//Str
+	const char* ATTR_WB_MODE = "CameraAttributes::WhiteBalance::Mode";//Str
+	const char* ATTR_WB_VALUE = "CameraAttributes::WhiteBalance::Value";//I64
+	const char* ATTR_EX_MODE = "CameraAttributes::Exposure::Mode";//Str
+	const char* ATTR_EX_VALUE = "CameraAttributes::Exposure::Value";//I64
+	const char* ATTR_BR_MODE = "CameraAttributes::Brightness::Mode";//Str
+	const char* ATTR_BR_VALUE = "CameraAttributes::Brightness::Value";//I64
 
 	IMAQdxSession rearSession;
 
