@@ -16,10 +16,8 @@ const static int CH_SHOOTERB = 0;//CAN
 const static int CH_ANGLEMOTOR = 2;//CAN
 
 const static int CH_ARMMAIN = 3;//CAN
-//const static int CH_ARMSECONDARY = 3;//PWM
 
-//const static int CH_HANGA = 4;//CAN
-//const static int CH_HANGB = 5;//CAN
+const static int CH_KICKER = 3;//PWM
 
 //-------------------LIMIT SWITCHES/SENSORS------------
 const static int CH_SHOOTER_ANGLE_BOTTOM = 0;
@@ -30,6 +28,11 @@ const static int CH_ENC_L_B = 3;
 const static int CH_ENC_R_A = 4;
 const static int CH_ENC_R_B = 5;
 
+const static int CH_HASBALL = 6;
+
+const static int CH_KICKERENC_A = 7;
+const static int CH_KICKERENC_B = 8;
+
 //--------------------HUMAN INPUT--------------
 const static int CH_DRIVESTICK = 0;
 const static int CH_SPECIALSTICK = 1;
@@ -39,16 +42,10 @@ const static int CH_PDP = 0;
 
 //-------------------PNEUMATICS------------------
 const static int CH_PCMA = 0;
-const static int CH_PCMB = 1;
 
 const static int CH_SHIFTER_PCM = CH_PCMA;
 const static int CH_SHIFTER_FW = 0;
 const static int CH_SHIFTER_RV = 1;
-
-const static int CH_FORKA_PCM = CH_PCMA;
-const static int CH_FORKB_PCM = CH_PCMA;
-const static int CH_FORK_FW = 2;
-const static int CH_FORK_RV = 3;
 
 const static int CH_SHOOTSTICK_PCM = CH_PCMA;
 const static int CH_SHOOTSTICK_FW = 6;
@@ -83,7 +80,5 @@ const static int BUT_ARMMAIN_FW = 6;
 const static int BUT_ARMMAIN_RV = 7;
 const static int BUT_ARMSEC_FW = 11;
 const static int BUT_ARMSEC_RV = 10;
-
-const static int BUT_FEELERS = 8;
 
 #endif
