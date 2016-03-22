@@ -102,6 +102,8 @@ public:
 
 	CANTalon armMain;
 
+	Victor kicker;
+
 	//----------------------SENSORS---------------------
 
 	//NavX Communication
@@ -173,22 +175,25 @@ public:
 	//Shifter
 	DoubleSolenoid shifter;
 
-	//Feelers
-	DoubleSolenoid feelers;
-
-	//Thing that pushes balls into wheels
-	DoubleSolenoid shootyStick;
-
 	Compressor compressor;
 
 	//--------------------------LIMIT SWITCHES--------------------------
 	LimitSwitch angleBottom;
 	LimitSwitch angleTop;
 
+	DigitalInput hasBall;
+
 	//--------------------------OTHER-----------------------------
 	int cycle;
 
 	Encoder leftEnc,rightEnc;
+
+	//Kicker tech
+	Encoder kickerEnc;
+	const static int KICKER_TICS_PER_REV = 471;//TODO
+	bool kickerMoving;
+	int kickerOffset;
+
 
 	Timer timer;
 
@@ -205,26 +210,25 @@ public:
 		shooterB(CH_SHOOTERB),
 		angleMotor(CH_ANGLEMOTOR),
 		armMain(CH_ARMMAIN),
+		kicker(CH_KICKER),
 		mainStick(CH_DRIVESTICK),
 		specials(CH_SPECIALSTICK),
 		pdp(CH_PDP),
 		shifter(CH_SHIFTER_PCM,CH_SHIFTER_FW,CH_SHIFTER_RV),
-		feelers(CH_FORKA_PCM,CH_FORK_FW,CH_FORK_RV),
-		shootyStick(CH_SHOOTSTICK_PCM,CH_SHOOTSTICK_FW,CH_SHOOTSTICK_RV),
 		compressor(CH_PCMA),
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
 		angleTop(CH_SHOOTER_ANGLE_TOP,true),
+		hasBall(CH_HASBALL),
 		leftEnc(CH_ENC_L_A,CH_ENC_L_B),
 		rightEnc(CH_ENC_R_A,CH_ENC_R_B),
+		kickerEnc(CH_KICKERENC_A,CH_KICKERENC_B),
 		timer()
 	{
 
 		//--------Motor inversion----------------
-		//shooterB.SetControlMode(CANSpeedController::kFollower);
 		shooterB.SetInverted(false);
 		shooterA.SetInverted(true);
-		//shooterB.Set(10);
-		shooterB.SetFeedbackDevice(shooterB.QuadEncoder);
+		shooterA.SetFeedbackDevice(shooterA.QuadEncoder);
 
 
 		drive.SetInvertedMotor(drive.kRearLeftMotor,false);
@@ -232,13 +236,6 @@ public:
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
 		angleMotor.SetInverted(true);
-		//angleMotor.SetControlMode(angleMotor.kPosition);
-		//angleMotor.ConfigEncoderCodesPerRev(1475);
-		//angleMotor.SetCloseLoopRampRate(0.25);
-		//angleMotor.SetPID(0.5,0,0);
-
-		//liftWinchSlave.SetControlMode(CANSpeedController::kFollower);
-		//liftWinchSlave.Set(CH_HANGA);
 	}
 
 
@@ -389,6 +386,10 @@ public:
 		leftEnc.Reset();
 		rightEnc.Reset();
 		armMain.SetEncPosition(0);
+		kickerEnc.Reset();
+
+		kickerMoving = false;
+		kickerOffset = 0;
 	}
 	/* ------------------------------------------------------------------------
 	 * 									Teleop
@@ -398,7 +399,7 @@ public:
 	//Called when Teleop starts
 	void TeleopInit()
 	{
-		//end = std::chrono::system_clock::now();
+
 	}
 
 	//Called repeatedly while Teleop is active
@@ -445,6 +446,10 @@ public:
 
 
 		}
+
+		SmartDashboard::PutNumber("Shooter Revs",shooterA.GetEncVel());
+
+		SmartDashboard::PutBoolean("Has Ball",hasBall.Get());
 		//---------------AUTOAIM-------------------
 		//If button is pressed, use vision to line up
 		if(specials.GetRawButton(BUT_AUTOAIMA))
@@ -579,17 +584,6 @@ public:
 			shifter.Set(shifter.kReverse);
 		}
 
-		//-----------------FEELERS-------------------------
-		//Extend feelers if button is pressed
-		if(specials.GetRawButton(BUT_FEELERS))
-		{
-			feelers.Set(feelers.kForward);
-		}
-		else
-		{
-			feelers.Set(feelers.kReverse);
-		}
-
 		//-------------------SHOOTER------------------
 
 		//Speed based on throttle lever, convert from -1<t<1 to 0<t<1
@@ -606,14 +600,7 @@ public:
 		shooterB.Set(speed);
 
 		//Change status of solenoid to push ball into wheels
-		if(specials.GetRawButton(BUT_FIRE))
-		{
-			shootyStick.Set(shootyStick.kForward);
-		}
-		else
-		{
-			shootyStick.Set(shootyStick.kReverse);
-		}
+		UpdateKicker(specials.GetRawButton(BUT_FIRE));
 
 		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY= specials.GetY();
@@ -655,13 +642,12 @@ public:
 		shooterA.Set(0);
 		shooterB.Set(0);
 		angleMotor.Set(0);
+		kicker.Set(0);
 
 		armMain.Set(0);
 		//armSecondary.Set(0);
 
 		//Reset pneumatics (remove if needed)
-		shootyStick.Set(shootyStick.kReverse);
-		feelers.Set(feelers.kReverse);
 		shifter.Set(shifter.kReverse);
 	}
 
@@ -983,9 +969,9 @@ public:
 		Wait(1.5);
 
 		//Fire
-		shootyStick.Set(shootyStick.kForward);
-		Wait(1);
-		shootyStick.Set(shootyStick.kReverse);
+		UpdateKicker(true);
+		while(!UpdateKicker(false)){}
+
 		shooterA.Set(0);
 		shooterB.Set(0);
 	}
@@ -1007,11 +993,9 @@ public:
 	void BreachCheval()
 	{
 		DriverStation::ReportError("Breaching Cheval");
-		feelers.Set(feelers.kForward);
 		CorrectedApproach(1,0);
 		ShooterToAngle(50);
 		CorrectedDrive(0.6,0,4);
-		feelers.Set(feelers.kReverse);
 	}
 
 	void BreachMoat()
@@ -1503,18 +1487,33 @@ public:
 		return (IsAutonomous()&&IsEnabled())||(mainStick.GetRawButton(BUT_BREACH2)||mainStick.GetRawButton(BUT_BREACH3)||mainStick.GetRawButton(BUT_BREACH4)||mainStick.GetRawButton(BUT_BREACH5));
 	}
 
-	//---------------MEASUREMENTS------------------
-	//Defences are 47.34 accross on floor, 48 in total distance over
-	/*
-	 *     |                   |           |                                 |
-	 *     |                   |           |                                 |
-	 *     |                   |           |                                 |
-	 *  AutoLine     74.27   Def: 47.34 floor,         191.5                Wall
-	 *                         48 to go over
-	 *                   TOTAL: 313.11
-	 *
-	 *
-	 */
+	bool UpdateKicker(bool activate)
+	{
+		if(kickerMoving)
+		{
+			//Kicker is moving, check if stop
+			int enc = kickerEnc.Get();
+			if(enc+kickerOffset>=KICKER_TICS_PER_REV)
+			{
+				kickerOffset = KICKER_TICS_PER_REV-enc;
+				kicker.Set(0);
+				kickerEnc.Reset();
+				kickerMoving=false;
+				return true;
+			}
+			return false;
+		}
+		else
+		{
+			//Kicker is not moving
+			if(activate)
+			{
+				kickerMoving=true;
+				kicker.Set(0);
+			}
+			return false;
+		}
+	}
 };
 
 START_ROBOT_CLASS(Robot)
