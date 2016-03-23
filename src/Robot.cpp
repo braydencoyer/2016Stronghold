@@ -1,4 +1,4 @@
-//Last Edit: 3/11/2016 3:59 pm
+//Last Edit: 3/22/16
 
 #include "WPILib.h"
 #include "AHRS.h"
@@ -82,9 +82,18 @@ public:
 	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
+	double CAMERA_BRIGHTNESS_AUTO = 130;//TODO
+	double CAMERA_BRIGHTNESS_DRIVING = 200;
+	unsigned int CAMERA_WHITEBALANCE = 8000;
+	double CAMERA_EXPOSURE = 20;
+	//BRIGHTNESS: MAX: 255 MIN: 30
+	//WHITE BALANCE: MAX: 10000 MIN: 2800
+	//EXPOSURE: MAX: 20000 MIN: 5
+
 	//-------------------MISC CONSTANTS-----------------------
 	double MAX_IN_SPEED = .7;
 
+	double LOWSHOT_SPEED = 0.8;
 
 	//-----------------------MOTORS-------------------------
 	Victor left, right;
@@ -98,7 +107,7 @@ public:
 
 	CANTalon armMain;
 
-	Victor kicker;
+	CANTalon kicker;
 
 	//----------------------SENSORS---------------------
 
@@ -140,6 +149,15 @@ public:
 	IMAQdxSession session;
 	int imaqError;
 
+	//Register display names for our usb cameras
+	const char* ATTR_VIDEO_MODE = "AcquisitionAttributes::VideoMode";//Str
+	const char* ATTR_WB_MODE = "CameraAttributes::WhiteBalance::Mode";//Str
+	const char* ATTR_WB_VALUE = "CameraAttributes::WhiteBalance::Value";//I64
+	const char* ATTR_EX_MODE = "CameraAttributes::Exposure::Mode";//Str
+	const char* ATTR_EX_VALUE = "CameraAttributes::Exposure::Value";//I64
+	const char* ATTR_BR_MODE = "CameraAttributes::Brightness::Mode";//Str
+	const char* ATTR_BR_VALUE = "CameraAttributes::Brightness::Value";//I64
+
 	IMAQdxSession rearSession;
 
 	//Position of target on-screen, to be used later.
@@ -176,10 +194,8 @@ public:
 	Encoder leftEnc,rightEnc;
 
 	//Kicker tech
-	Encoder kickerEnc;
-	const static int KICKER_TICS_PER_REV = 471;//TODO
+	const static int KICKER_TICS_PER_REV = 471;
 	bool kickerMoving;
-	int kickerOffset;
 
 
 	Timer timer;
@@ -208,7 +224,6 @@ public:
 		hasBall(CH_HASBALL),
 		leftEnc(CH_ENC_L_A,CH_ENC_L_B),
 		rightEnc(CH_ENC_R_A,CH_ENC_R_B),
-		kickerEnc(CH_KICKERENC_A,CH_KICKERENC_B),
 		timer()
 	{
 
@@ -216,6 +231,8 @@ public:
 		shooterB.SetInverted(false);
 		shooterA.SetInverted(true);
 		shooterA.SetFeedbackDevice(shooterA.QuadEncoder);
+
+		kicker.SetFeedbackDevice(kicker.QuadEncoder);
 
 
 		drive.SetInvertedMotor(drive.kRearLeftMotor,false);
@@ -314,7 +331,7 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
+		//Opens the camera for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
 		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
@@ -363,6 +380,11 @@ public:
 		SmartDashboard::PutNumber("X Tol", ORIGIN_X_TOL);
 		SmartDashboard::PutNumber("Y Tol", ORIGIN_Y_TOL);
 
+		SmartDashboard::PutNumber("BrightnessTarget",CAMERA_BRIGHTNESS_AUTO);
+		SmartDashboard::PutNumber("WhiteBalanceTarget",CAMERA_WHITEBALANCE);
+		SmartDashboard::PutNumber("ExposureTarget",CAMERA_EXPOSURE);
+
+		SetUpCamera();
 
 		//-------------Encoders--------------
 		//Reset all encoders if Talon power has not cycled
@@ -370,10 +392,9 @@ public:
 		leftEnc.Reset();
 		rightEnc.Reset();
 		armMain.SetEncPosition(0);
-		kickerEnc.Reset();
+		kicker.SetEncPosition(0);
 
 		kickerMoving = false;
-		kickerOffset = 0;
 	}
 	/* ------------------------------------------------------------------------
 	 * 									Teleop
@@ -383,14 +404,13 @@ public:
 	//Called when Teleop starts
 	void TeleopInit()
 	{
-
+		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_DRIVING);
 	}
 
 	//Called repeatedly while Teleop is active
 	void TeleopPeriodic()
 	{
-
-		if(!DriverStation::GetInstance().IsFMSAttached())
+		if(!DriverStation::GetInstance().IsFMSAttached() && cycle==3)
 		{
 			SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
 			SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
@@ -404,6 +424,8 @@ public:
 			SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
 
 			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
+
+			SmartDashboard::PutNumber("Kicker Encoder",kicker.GetEncPosition());
 		}
 
 		SmartDashboard::PutNumber("Shooter Revs",shooterA.GetEncVel());
@@ -413,13 +435,16 @@ public:
 		//If button is pressed, use vision to line up
 		if(specials.GetRawButton(BUT_AUTOAIMA))
 		{
+			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
 			AutoAimHardLoop();
 			//Return halts all execution here
+			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_DRIVING);
 			return;
 		}
 		//For vision calibration only, does not move robot, sends masked image to dash too
 		if(specials.GetRawButton(BUT_AUTOAIMB))
 		{
+			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
 			CalibrateVision();
 			return;
 		}
@@ -484,8 +509,12 @@ public:
 			{
 				IMAQdxStopAcquisition(rearSession);
 				IMAQdxUnconfigureAcquisition(rearSession);
+				IMAQdxCloseCamera(session);
+				imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
 				IMAQdxStartAcquisition(session);
 				IMAQdxConfigureGrab(session);
+				SetUpCamera();
+				IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_DRIVING);
 			}
 		}
 		else
@@ -551,7 +580,11 @@ public:
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
-		speed*=mult;
+		//speed*=mult;
+		if(specials.GetRawButton(BUT_LOWSHOT_A)||specials.GetRawButton(BUT_LOWSHOT_B))
+		{
+			speed*=LOWSHOT_SPEED;
+		}
 
 		//Set wheels to speed
 		shooterA.Set(speed);
@@ -639,7 +672,7 @@ public:
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
 
-		//ZeroShooter();
+		ZeroShooter();
 
 		//Re zero NavX in case it drifted while stationary
 		//NOTE: THIS IS NOT RECALIBRATION.
@@ -650,7 +683,6 @@ public:
 		leftEnc.Reset();
 		rightEnc.Reset();
 		armMain.SetEncPosition(0);
-		angleMotor.SetEncPosition(0);
 	}
 
 
@@ -1063,23 +1095,6 @@ public:
 		}
 		return false;
 	}
-	/*
-	void ApproachRampForward(double speed = 1)
-	{
-		while(!RotateToAngle(0) && ShouldBeBreaching()){}
-		drive.TankDrive(speed-0.08,speed);
-		while(ahrs->GetRoll()<6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(0.,0);
-	}
-
-	void ApproachRampReverse(double speed = 1)
-	{
-		while(!RotateToAngle(180) && ShouldBeBreaching()){}
-		drive.ArcadeDrive(-speed,0);
-		while(ahrs->GetRoll()>-6 && ShouldBeBreaching()){}
-		drive.ArcadeDrive(0.,0);
-	}
-	 */
 
 	void CorrectedApproach(double speed, double angle)
 	{
@@ -1382,12 +1397,50 @@ public:
 		return particle1.PercentAreaToImageArea > particle2.PercentAreaToImageArea;
 	}
 
+	void SetUpCamera()
+	{
+		if(!DriverStation::GetInstance().IsFMSAttached())
+		{
+			CAMERA_BRIGHTNESS_AUTO=SmartDashboard::GetNumber("BrightnessTarget",-99);
+			CAMERA_WHITEBALANCE=(unsigned int)SmartDashboard::GetNumber("WhiteBalanceTarget",-99);
+			CAMERA_EXPOSURE=SmartDashboard::GetNumber("ExposureTarget",-99);
+			std::cout << CAMERA_BRIGHTNESS_AUTO << " " << CAMERA_WHITEBALANCE << " " << CAMERA_EXPOSURE << std::endl;
+		}
+		//Wait(9);
+		IMAQdxSetAttribute(session,ATTR_BR_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
+		//Wait(1);
+		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
+		//Wait(1);
+		IMAQdxSetAttribute(session,ATTR_WB_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
+		//Wait(1);
+		IMAQdxSetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,CAMERA_WHITEBALANCE);
+		//Wait(1);
+		IMAQdxSetAttribute(session,ATTR_EX_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
+		//Wait(1);
+		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_EXPOSURE);
+		//Wait(1);
+		/*double value;
+		IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
+		std::cout << "MAXEX" << value << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
+		std::cout << "MINEX" << value << std::endl;
+		IMAQdxGetAttributeMaximum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
+		std::cout <<"MAXBR"<< value << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
+		std::cout <<"MINBR"<< value << std::endl;
+		int val2 = -111;
+		IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
+		std::cout <<"MAXWB"<< val2 << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
+		std::cout <<"MINWB"<< val2 << std::endl;*/
+	}
+
 	/* -------------------------------------------------------------------
 	 * 							Encoder Stuff
 	 * -------------------------------------------------------------------
 	 */
 
-	void ShooterToAngle(int target)
+ 	void ShooterToAngle(int target)
 	{
 		target=-target;
 		if(target<angleMotor.GetEncPosition())
@@ -1457,12 +1510,11 @@ public:
 		if(kickerMoving)
 		{
 			//Kicker is moving, check if stop
-			int enc = kickerEnc.Get();
-			if(enc+kickerOffset>=KICKER_TICS_PER_REV)
+			int enc = kicker.GetEncPosition();
+			if(enc>=KICKER_TICS_PER_REV)
 			{
-				kickerOffset = KICKER_TICS_PER_REV-enc;
 				kicker.Set(0);
-				kickerEnc.Reset();
+				kicker.SetEncPosition(kicker.GetEncPosition()-KICKER_TICS_PER_REV);
 				kickerMoving=false;
 				return true;
 			}

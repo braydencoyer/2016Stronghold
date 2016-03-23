@@ -17,7 +17,7 @@ const static int CH_ANGLEMOTOR = 2;//CAN
 
 const static int CH_ARMMAIN = 3;//CAN
 
-const static int CH_KICKER = 3;//PWM
+const static int CH_KICKER = 4;//CAN
 
 //-------------------LIMIT SWITCHES/SENSORS------------
 const static int CH_SHOOTER_ANGLE_BOTTOM = 0;
@@ -29,9 +29,6 @@ const static int CH_ENC_R_A = 4;
 const static int CH_ENC_R_B = 5;
 
 const static int CH_HASBALL = 6;
-
-const static int CH_KICKERENC_A = 7;
-const static int CH_KICKERENC_B = 8;
 
 //--------------------HUMAN INPUT--------------
 const static int CH_DRIVESTICK = 0;
@@ -80,5 +77,8 @@ const static int BUT_ARMMAIN_FW = 6;
 const static int BUT_ARMMAIN_RV = 7;
 const static int BUT_ARMSEC_FW = 11;
 const static int BUT_ARMSEC_RV = 10;
+
+const static int BUT_LOWSHOT_A = 8;
+const static int BUT_LOWSHOT_B = 9;
 
 #endif
