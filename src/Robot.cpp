@@ -1,4 +1,4 @@
-//Last Edit: 3/11/2016 3:59 pm
+//Last Edit: 3/22/16
 
 #include "WPILib.h"
 #include "AHRS.h"
@@ -82,9 +82,9 @@ public:
 	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
-	int CAMERA_BRIGHTNESS = 1;
-	int CAMERA_WHITEBALANCE = 4500;
-	int CAMERA_EXPOSURE = 10;
+	double CAMERA_BRIGHTNESS = 0.1;
+	unsigned int CAMERA_WHITEBALANCE = 8000;
+	double CAMERA_EXPOSURE = 0.6;
 
 	//-------------------MISC CONSTANTS-----------------------
 	double MAX_IN_SPEED = .7;
@@ -380,6 +380,8 @@ public:
 		SmartDashboard::PutNumber("WhiteBalanceTarget",CAMERA_WHITEBALANCE);
 		SmartDashboard::PutNumber("ExposureTarget",CAMERA_EXPOSURE);
 
+		SetUpCamera();
+
 		//-------------Encoders--------------
 		//Reset all encoders if Talon power has not cycled
 		angleMotor.SetEncPosition(0);
@@ -405,7 +407,7 @@ public:
 	//Called repeatedly while Teleop is active
 	void TeleopPeriodic()
 	{
-		if(!DriverStation::GetInstance().IsFMSAttached())
+		if(!DriverStation::GetInstance().IsFMSAttached() && cycle==3)
 		{
 			SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
 			SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
@@ -419,32 +421,6 @@ public:
 			SmartDashboard::PutNumber("Arm Encoder",armMain.GetEncPosition());
 
 			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
-			int val = -1;
-			IMAQdxGetAttributeMinimum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Min brightness",val);
-			IMAQdxGetAttributeMaximum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Max brightness",val);
-
-			IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Min Exposure",val);
-			IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Max Exposure",val);
-
-			IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Min White Balance",val);
-			IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Max White Balance",val);
-
-			IMAQdxGetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("brightness",val);
-
-			IMAQdxGetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("White Balance",val);
-
-			IMAQdxGetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,(void*)val);
-			SmartDashboard::PutNumber("Exposure",val);
-
-
 		}
 
 		SmartDashboard::PutNumber("Shooter Revs",shooterA.GetEncVel());
@@ -525,9 +501,9 @@ public:
 			{
 				IMAQdxStopAcquisition(rearSession);
 				IMAQdxUnconfigureAcquisition(rearSession);
-				SetUpCamera();
 				IMAQdxStartAcquisition(session);
 				IMAQdxConfigureGrab(session);
+				SetUpCamera();
 			}
 		}
 		else
@@ -1409,12 +1385,39 @@ public:
 
 	void SetUpCamera()
 	{
+		if(!DriverStation::GetInstance().IsFMSAttached())
+		{
+			CAMERA_BRIGHTNESS=SmartDashboard::GetNumber("BrightnessTarget",-99);
+			CAMERA_WHITEBALANCE=SmartDashboard::GetNumber("WhiteBalanceTarget",-99);
+			CAMERA_EXPOSURE=SmartDashboard::GetNumber("ExposureTarget",-99);
+		}
+		Wait(9);
 		IMAQdxSetAttribute(session,ATTR_BR_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,SmartDashboard::GetNumber("BrightnessTarget",0));
+		Wait(0.5);
+		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS);
+		Wait(0.5);
 		IMAQdxSetAttribute(session,ATTR_WB_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		IMAQdxSetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,SmartDashboard::GetNumber("WhiteBalanceTarget",0));
+		Wait(0.5);
+		IMAQdxSetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,CAMERA_WHITEBALANCE);
+		Wait(0.5);
 		IMAQdxSetAttribute(session,ATTR_EX_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeI64,SmartDashboard::GetNumber("ExposureTarget",0));
+		Wait(0.5);
+		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_EXPOSURE);
+		Wait(0.5);
+		double *value;
+		IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		std::cout << "MAXEX" << value << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		std::cout << "MINEX" << value << std::endl;
+		IMAQdxGetAttributeMaximum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		std::cout <<"MAXBR"<< value << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		std::cout <<"MINBR"<< value << std::endl;
+		int val2 = -111;
+		IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)val2);
+		std::cout <<"MAXWB"<< value << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)val2);
+		std::cout <<"MINWB"<< value << std::endl;
 	}
 
 	/* -------------------------------------------------------------------
