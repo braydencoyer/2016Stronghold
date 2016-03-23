@@ -82,9 +82,12 @@ public:
 	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
-	double CAMERA_BRIGHTNESS = 0.1;
+	double CAMERA_BRIGHTNESS = 30.1;//TODO
 	unsigned int CAMERA_WHITEBALANCE = 8000;
-	double CAMERA_EXPOSURE = 0.6;
+	double CAMERA_EXPOSURE = 20;
+	//BRIGHTNESS: MAX: 255 MIN: 30
+	//WHITE BALANCE: MAX: 10000 MIN: 2800
+	//EXPOSURE: MAX: 20000 MIN: 5
 
 	//-------------------MISC CONSTANTS-----------------------
 	double MAX_IN_SPEED = .7;
@@ -190,7 +193,7 @@ public:
 
 	//Kicker tech
 	Encoder kickerEnc;
-	const static int KICKER_TICS_PER_REV = 471;//TODO
+	const static int KICKER_TICS_PER_REV = 471;
 	bool kickerMoving;
 	int kickerOffset;
 
@@ -327,7 +330,7 @@ public:
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
-		//Opens the camera "cam0" for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
+		//Opens the camera for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
 		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
@@ -501,6 +504,8 @@ public:
 			{
 				IMAQdxStopAcquisition(rearSession);
 				IMAQdxUnconfigureAcquisition(rearSession);
+				IMAQdxCloseCamera(session);
+				imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
 				IMAQdxStartAcquisition(session);
 				IMAQdxConfigureGrab(session);
 				SetUpCamera();
@@ -657,7 +662,7 @@ public:
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
 
-		//ZeroShooter();
+		ZeroShooter();
 
 		//Re zero NavX in case it drifted while stationary
 		//NOTE: THIS IS NOT RECALIBRATION.
@@ -668,7 +673,6 @@ public:
 		leftEnc.Reset();
 		rightEnc.Reset();
 		armMain.SetEncPosition(0);
-		angleMotor.SetEncPosition(0);
 	}
 
 
@@ -1388,36 +1392,37 @@ public:
 		if(!DriverStation::GetInstance().IsFMSAttached())
 		{
 			CAMERA_BRIGHTNESS=SmartDashboard::GetNumber("BrightnessTarget",-99);
-			CAMERA_WHITEBALANCE=SmartDashboard::GetNumber("WhiteBalanceTarget",-99);
+			CAMERA_WHITEBALANCE=(unsigned int)SmartDashboard::GetNumber("WhiteBalanceTarget",-99);
 			CAMERA_EXPOSURE=SmartDashboard::GetNumber("ExposureTarget",-99);
+			std::cout << CAMERA_BRIGHTNESS << " " << CAMERA_WHITEBALANCE << " " << CAMERA_EXPOSURE << std::endl;
 		}
-		Wait(9);
+		//Wait(9);
 		IMAQdxSetAttribute(session,ATTR_BR_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		Wait(0.5);
+		//Wait(1);
 		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS);
-		Wait(0.5);
+		//Wait(1);
 		IMAQdxSetAttribute(session,ATTR_WB_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		Wait(0.5);
+		//Wait(1);
 		IMAQdxSetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,CAMERA_WHITEBALANCE);
-		Wait(0.5);
+		//Wait(1);
 		IMAQdxSetAttribute(session,ATTR_EX_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		Wait(0.5);
+		//Wait(1);
 		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_EXPOSURE);
-		Wait(0.5);
-		double *value;
-		IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		//Wait(1);
+		double value;
+		IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
 		std::cout << "MAXEX" << value << std::endl;
-		IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
 		std::cout << "MINEX" << value << std::endl;
-		IMAQdxGetAttributeMaximum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		IMAQdxGetAttributeMaximum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
 		std::cout <<"MAXBR"<< value << std::endl;
-		IMAQdxGetAttributeMinimum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)value);
+		IMAQdxGetAttributeMinimum(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
 		std::cout <<"MINBR"<< value << std::endl;
 		int val2 = -111;
-		IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)val2);
-		std::cout <<"MAXWB"<< value << std::endl;
-		IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)val2);
-		std::cout <<"MINWB"<< value << std::endl;
+		IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
+		std::cout <<"MAXWB"<< val2 << std::endl;
+		IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
+		std::cout <<"MINWB"<< val2 << std::endl;
 	}
 
 	/* -------------------------------------------------------------------
