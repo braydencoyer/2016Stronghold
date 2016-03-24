@@ -61,6 +61,8 @@ const static int BUT_BREACH3 = 8;
 const static int BUT_BREACH4 = 9;
 const static int BUT_BREACH5 = 10;
 
+const static int BUT_APPROACH = 11;
+
 const static int BUT_SWAPCAMS = 2;
 
 const static int BUT_NAVX_RESET = 4;
