@@ -1,4 +1,4 @@
-//Last Edit: 3/22/16
+//Sorry Don, I'll never remember to change a date up here. Just look at the date on the file.
 
 #include "WPILib.h"
 #include "AHRS.h"
@@ -152,11 +152,11 @@ public:
 	//Register display names for our usb cameras
 	const char* ATTR_VIDEO_MODE = "AcquisitionAttributes::VideoMode";//Str
 	const char* ATTR_WB_MODE = "CameraAttributes::WhiteBalance::Mode";//Str
-	const char* ATTR_WB_VALUE = "CameraAttributes::WhiteBalance::Value";//I64
+	const char* ATTR_WB_VALUE = "CameraAttributes::WhiteBalance::Value";//U32
 	const char* ATTR_EX_MODE = "CameraAttributes::Exposure::Mode";//Str
-	const char* ATTR_EX_VALUE = "CameraAttributes::Exposure::Value";//I64
+	const char* ATTR_EX_VALUE = "CameraAttributes::Exposure::Value";//F64
 	const char* ATTR_BR_MODE = "CameraAttributes::Brightness::Mode";//Str
-	const char* ATTR_BR_VALUE = "CameraAttributes::Brightness::Value";//I64
+	const char* ATTR_BR_VALUE = "CameraAttributes::Brightness::Value";//F64
 
 	IMAQdxSession rearSession;
 
@@ -1092,7 +1092,6 @@ public:
 		double currentAngle = ahrs->GetYaw();
 
 		//If at angle already, stop and return
-		//if(currentAngle>targetAngle-ANGLE_TOLERANCE && currentAngle<targetAngle+ANGLE_TOLERANCE)
 		if(abs(currentAngle-targetAngle)<ANGLE_TOLERANCE ||
 				((targetAngle>180-ANGLE_TOLERANCE || targetAngle<-180+ANGLE_TOLERANCE) &&
 						(currentAngle>180-ANGLE_TOLERANCE || currentAngle<-180+ANGLE_TOLERANCE)))
@@ -1201,7 +1200,10 @@ public:
 		}
 
 		//Check if target is in correct spot (within tolerance) already
-		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL && screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL && screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL && screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
+		if(screenPosX>TARGET_ORIGIN_X-ORIGIN_X_TOL
+				&& screenPosX<TARGET_ORIGIN_X+ORIGIN_X_TOL
+				&& screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL
+				&& screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
 			drive.ArcadeDrive(0.0,0.0);
 			ShooterAngleToSpeed(0);
@@ -1534,7 +1536,12 @@ public:
 	bool ShouldBeBreaching()
 	{
 		//Return true if we are autonomous and enabled OR a button is pressed and we are enabled
-		return (IsAutonomous()&&IsEnabled())||(mainStick.GetRawButton(BUT_BREACH2)||mainStick.GetRawButton(BUT_BREACH3)||mainStick.GetRawButton(BUT_BREACH4)||mainStick.GetRawButton(BUT_BREACH5)||mainStick.GetRawButton(BUT_APPROACH));
+		return (IsAutonomous()&&IsEnabled())||
+				(mainStick.GetRawButton(BUT_BREACH2)
+						||mainStick.GetRawButton(BUT_BREACH3)
+						||mainStick.GetRawButton(BUT_BREACH4)
+						||mainStick.GetRawButton(BUT_BREACH5)
+						||mainStick.GetRawButton(BUT_APPROACH));
 	}
 
 	bool UpdateKicker(bool activate)
