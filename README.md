@@ -34,4 +34,4 @@ This section is to document all current branches and their status.
 - NavXStuff: Initial integration of the NavX-MXP device. Branch pulled into master at completion, now closed to further edits.
 - LimitSwitchClass: Initial writing and experimenting with the LimitSwitch class. Class is complete and functional. Branch pulled into master at completion, now closed to further edits.
 - USBPermaMode: Migration from IMAQ camera management to use of the USBCamera class. This was intended to allow permanent camera configuration to disable automatic brightness recalibration, which made reliable targeting impossible. Turns out the class is just an awful wrapper for IMAQ, and spews errors constantly. Branch not pulled into master, now abandoned.
-- IMAQdxSetAttribute: Attempting to use IMAQ to manually change properties in runtime memory of cameras. Requires setting raw values over the USB connection. Work in progress.
+- IMAQdxSetAttribute: Use IMAQ to manually change properties in runtime memory of cameras. Requires setting raw values over the USB connection. Merged into master, closed.
