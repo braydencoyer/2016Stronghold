@@ -82,7 +82,7 @@ public:
 	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
-	double CAMERA_BRIGHTNESS_AUTO = 130;//TODO
+	double CAMERA_BRIGHTNESS_AUTO = 150;//TODO
 	double CAMERA_BRIGHTNESS_DRIVING = 200;
 	unsigned int CAMERA_WHITEBALANCE = 8000;
 	double CAMERA_EXPOSURE = 20;
@@ -186,7 +186,7 @@ public:
 	LimitSwitch angleBottom;
 	LimitSwitch angleTop;
 
-	DigitalInput hasBall;
+	LimitSwitch hasBall;
 
 	//--------------------------OTHER-----------------------------
 	int cycle;
@@ -221,25 +221,29 @@ public:
 		compressor(CH_PCMA),
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
 		angleTop(CH_SHOOTER_ANGLE_TOP,true),
-		hasBall(CH_HASBALL),
+		hasBall(CH_HASBALL,true),
 		leftEnc(CH_ENC_L_A,CH_ENC_L_B),
 		rightEnc(CH_ENC_R_A,CH_ENC_R_B),
 		timer()
 	{
 
 		//--------Motor inversion----------------
-		shooterB.SetInverted(false);
-		shooterA.SetInverted(true);
+		shooterB.SetInverted(true);
+		shooterA.SetInverted(false);
 		shooterA.SetFeedbackDevice(shooterA.QuadEncoder);
 
 		kicker.SetFeedbackDevice(kicker.QuadEncoder);
 
+		kicker.ConfigNeutralMode(kicker.kNeutralMode_Brake);
+		shooterA.ConfigNeutralMode(shooterA.kNeutralMode_Brake);
+		shooterB.ConfigNeutralMode(shooterB.kNeutralMode_Brake);
+		angleMotor.ConfigNeutralMode(angleMotor.kNeutralMode_Brake);
 
 		drive.SetInvertedMotor(drive.kRearLeftMotor,false);
 		drive.SetInvertedMotor(drive.kRearRightMotor,false);
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
-		angleMotor.SetInverted(true);
+		angleMotor.SetInverted(false);
 	}
 
 
@@ -248,13 +252,18 @@ public:
 		drive.SetSafetyEnabled(false);
 		left.SetSafetyEnabled(false);
 		right.SetSafetyEnabled(false);
+		angleMotor.SetSafetyEnabled(false);
+		kicker.SetSafetyEnabled(false);
+
+		shooterA.SetSafetyEnabled(false);
+		shooterB.SetSafetyEnabled(false);
 
 		cycle=0;
 
 		angleMotor.SetEncPosition(0);
 
 		armMain.SetSafetyEnabled(false);
-		//armSecondary.SetSafetyEnabled(false);
+
 		//--------------NAVX-MXP-------------------
 		//Try to instantiate navx. If it fails, catch error so code doesn't crash.
 		try {
@@ -426,6 +435,11 @@ public:
 			SmartDashboard::PutNumber("Shooter Encoder",shooterB.GetEncVel());
 
 			SmartDashboard::PutNumber("Kicker Encoder",kicker.GetEncPosition());
+
+			SmartDashboard::PutBoolean("Upper limit",angleTop.Get());
+			SmartDashboard::PutBoolean("Lower Limit",angleBottom.Get());
+
+			SmartDashboard::PutBoolean("Firing",kickerMoving);
 		}
 
 		SmartDashboard::PutNumber("Shooter Revs",shooterA.GetEncVel());
@@ -464,6 +478,12 @@ public:
 		}
 
 		//------------------AUTOBREACH----------------------
+		//If button pressed, approach
+		if(mainStick.GetRawButton(BUT_APPROACH))
+		{
+			CorrectedApproach(1,0);
+			return;
+		}
 		//If button pressed, breach defType at selected position
 		if(mainStick.GetRawButton(BUT_BREACH2))
 		{
@@ -633,7 +653,7 @@ public:
 		shooterA.Set(0);
 		shooterB.Set(0);
 		angleMotor.Set(0);
-		kicker.Set(0);
+		//kicker.Set(0);
 
 		armMain.Set(0);
 		//armSecondary.Set(0);
@@ -1458,7 +1478,7 @@ public:
 
 	void ZeroShooter()
 	{
-		ShooterAngleToSpeed(0.5);
+		ShooterAngleToSpeed(-0.5);
 		while(angleBottom.Get() && IsEnabled() && IsAutonomous()){}
 		ShooterAngleToSpeed(0);
 		angleMotor.SetEncPosition(0);
@@ -1472,7 +1492,19 @@ public:
 		}
 		else
 		{
-			angleMotor.Set(percent);
+			//This block smoothes shooter movement outside the holding range, graph as piecewise function to understand
+			if(percent>0)
+			{
+				angleMotor.Set((1-SHOOTER_ANGLE_HOLD_PERCENT)/(1-SHOOTER_ANGLE_HOLD_PERCENT)*percent
+						+(1-SHOOTER_ANGLE_HOLD_PERCENT)/(1-SHOOTER_ANGLE_HOLD_PERCENT)*SHOOTER_ANGLE_HOLD_PERCENT
+						+SHOOTER_ANGLE_HOLD_PERCENT);
+			}
+			else
+			{
+				angleMotor.Set((-1-SHOOTER_ANGLE_HOLD_PERCENT)/(-1+SHOOTER_ANGLE_HOLD_PERCENT)*percent
+						+(-1-SHOOTER_ANGLE_HOLD_PERCENT)/(-1+SHOOTER_ANGLE_HOLD_PERCENT)*SHOOTER_ANGLE_HOLD_PERCENT
+						+SHOOTER_ANGLE_HOLD_PERCENT);
+			}
 		}
 	}
 
@@ -1502,7 +1534,7 @@ public:
 	bool ShouldBeBreaching()
 	{
 		//Return true if we are autonomous and enabled OR a button is pressed and we are enabled
-		return (IsAutonomous()&&IsEnabled())||(mainStick.GetRawButton(BUT_BREACH2)||mainStick.GetRawButton(BUT_BREACH3)||mainStick.GetRawButton(BUT_BREACH4)||mainStick.GetRawButton(BUT_BREACH5));
+		return (IsAutonomous()&&IsEnabled())||(mainStick.GetRawButton(BUT_BREACH2)||mainStick.GetRawButton(BUT_BREACH3)||mainStick.GetRawButton(BUT_BREACH4)||mainStick.GetRawButton(BUT_BREACH5)||mainStick.GetRawButton(BUT_APPROACH));
 	}
 
 	bool UpdateKicker(bool activate)
@@ -1526,7 +1558,7 @@ public:
 			if(activate)
 			{
 				kickerMoving=true;
-				kicker.Set(0);
+				kicker.Set(1);
 			}
 			return false;
 		}
