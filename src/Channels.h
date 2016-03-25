@@ -68,6 +68,8 @@ const static int BUT_SWAPCAMS = 2;
 const static int BUT_NAVX_RESET = 4;
 const static int BUT_ENCODERS_RESET = 6;
 
+const static int BUT_PANIC_KILL = 12;
+
 //-----------------Specials Stick-------------------------
 const static int BUT_FIRE = 1;
 const static int BUT_SHOOTER_OUT = 2;

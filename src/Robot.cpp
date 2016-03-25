@@ -194,9 +194,10 @@ public:
 	Encoder leftEnc,rightEnc;
 
 	//Kicker tech
-	const static int KICKER_TICS_PER_REV = 471;
+	const static int KICKER_TICS_PER_REV = 1970;
 	bool kickerMoving;
 
+	bool KILL;
 
 	Timer timer;
 
@@ -334,6 +335,8 @@ public:
 		SmartDashboard::PutData("DefenseSelectFour",def[2]);
 		SmartDashboard::PutData("DefenseSelectFive",def[3]);
 
+		KILL = false;
+
 		//------------------VISION---------------------
 		//Create space in memory for images
 		binaryFrame = imaqCreateImage(IMAQ_IMAGE_U8,0);
@@ -436,8 +439,8 @@ public:
 
 			SmartDashboard::PutNumber("Kicker Encoder",kicker.GetEncPosition());
 
-			SmartDashboard::PutBoolean("Upper limit",angleTop.Get());
-			SmartDashboard::PutBoolean("Lower Limit",angleBottom.Get());
+			SmartDashboard::PutBoolean("Upper limit",angleTop.Get(KILL));
+			SmartDashboard::PutBoolean("Lower Limit",angleBottom.Get(KILL));
 
 			SmartDashboard::PutBoolean("Firing",kickerMoving);
 		}
@@ -615,8 +618,8 @@ public:
 
 		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY= specials.GetY();
-		if(!angleBottom.Get() && specialsY<0) specialsY=0;
-		if(!angleTop.Get() && specialsY>0) specialsY=0;
+		if(!angleBottom.Get(KILL) && specialsY<0) specialsY=0;
+		if(!angleTop.Get(KILL) && specialsY>0) specialsY=0;
 		ShooterAngleToSpeed(specialsY);
 
 
@@ -633,6 +636,12 @@ public:
 		else
 		{
 			armMain.Set(0);
+		}
+
+		if(mainStick.GetRawButton(BUT_PANIC_KILL))
+		{
+			KILL = true;
+			DriverStation::ReportError("All Switches Bypassed.");
 		}
 	}
 
@@ -1426,7 +1435,7 @@ public:
 			CAMERA_BRIGHTNESS_AUTO=SmartDashboard::GetNumber("BrightnessTarget",-99);
 			CAMERA_WHITEBALANCE=(unsigned int)SmartDashboard::GetNumber("WhiteBalanceTarget",-99);
 			CAMERA_EXPOSURE=SmartDashboard::GetNumber("ExposureTarget",-99);
-			std::cout << CAMERA_BRIGHTNESS_AUTO << " " << CAMERA_WHITEBALANCE << " " << CAMERA_EXPOSURE << std::endl;
+			//std::cout << CAMERA_BRIGHTNESS_AUTO << " " << CAMERA_WHITEBALANCE << " " << CAMERA_EXPOSURE << std::endl;
 		}
 		//Wait(9);
 		IMAQdxSetAttribute(session,ATTR_BR_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
@@ -1468,12 +1477,12 @@ public:
 		if(target<angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(0.5);
-			while(target<angleMotor.GetEncPosition() && angleTop.Get() && ShouldBeBreaching()){};
+			while(target<angleMotor.GetEncPosition() && angleTop.Get(KILL) && ShouldBeBreaching()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(-0.5);
-			while(target>angleMotor.GetEncPosition() && angleBottom.Get() && ShouldBeBreaching()){};
+			while(target>angleMotor.GetEncPosition() && angleBottom.Get(KILL) && ShouldBeBreaching()){};
 		}
 		ShooterAngleToSpeed(0);
 	}
@@ -1549,8 +1558,9 @@ public:
 		if(kickerMoving)
 		{
 			//Kicker is moving, check if stop
-			int enc = kicker.GetEncPosition();
-			if(enc>=KICKER_TICS_PER_REV)
+			//int enc = kicker.GetEncPosition();
+			std::cout << kicker.GetEncPosition() << std::endl;
+			if(kicker.GetEncPosition()>=KICKER_TICS_PER_REV)
 			{
 				kicker.Set(0);
 				kicker.SetEncPosition(kicker.GetEncPosition()-KICKER_TICS_PER_REV);
@@ -1565,7 +1575,7 @@ public:
 			if(activate)
 			{
 				kickerMoving=true;
-				kicker.Set(1);
+				kicker.Set(0.3);
 			}
 			return false;
 		}

@@ -17,4 +17,10 @@ class LimitSwitch
 		else return !swtch->Get();
 	}
 
+	bool Get(bool KILL)
+	{
+		if(KILL) return true;
+		else return Get();
+	}
+
 };
