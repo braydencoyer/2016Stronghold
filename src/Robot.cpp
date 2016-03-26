@@ -71,15 +71,15 @@ public:
 	double ANGLE_TOLERANCE = 2;   //Degrees, how far can we be + or -
 
 	//--------------------------VISION CONSTANTS-------------------
-	int TARGET_ORIGIN_X = 333;
-	int TARGET_ORIGIN_Y = 307;
+	int TARGET_ORIGIN_X = 373;
+	int TARGET_ORIGIN_Y = 186;
 	int ORIGIN_X_TOL = 15;
-	int ORIGIN_Y_TOL = 18;
+	int ORIGIN_Y_TOL = 17;
 
 	Range RING_HUE_RANGE = {101, 155};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {225, 255};	//Default saturation range for ring light, old=88
 	Range RING_VAL_RANGE = {240, 255};	//Default value range for ring light old=230
-	float AREA_MINIMUM = 0.1; //Area minimum for particle as a percentage of total image area
+	float AREA_MINIMUM = 0.05; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	double CAMERA_BRIGHTNESS_AUTO = 150;//TODO
@@ -222,7 +222,7 @@ public:
 		compressor(CH_PCMA),
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
 		angleTop(CH_SHOOTER_ANGLE_TOP,true),
-		hasBall(CH_HASBALL,true),
+		hasBall(CH_HASBALL,false),
 		leftEnc(CH_ENC_L_A,CH_ENC_L_B),
 		rightEnc(CH_ENC_R_A,CH_ENC_R_B),
 		timer()
@@ -453,7 +453,9 @@ public:
 		if(specials.GetRawButton(BUT_AUTOAIMA))
 		{
 			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
+			SmartDashboard::PutBoolean("Done",false);
 			AutoAimHardLoop();
+			SmartDashboard::PutBoolean("Done",true);
 			//Return halts all execution here
 			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_DRIVING);
 			return;
@@ -463,6 +465,14 @@ public:
 		{
 			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
 			CalibrateVision();
+			return;
+		}
+
+		//---------------Directional--------------------
+		int pov = mainStick.GetPOV();
+		if(pov!=-1)
+		{
+			SmartDashboard::PutBoolean("Done",RotateToAngle(pov,1));
 			return;
 		}
 
@@ -1022,7 +1032,7 @@ public:
 		DriverStation::ReportError("Breaching Moat");
 		CorrectedApproach(1,0);
 		//Just drive?
-		CorrectedDrive(1,0,3);
+		CorrectedDrive(1,0,6);
 	}
 
 	void BreachRamparts()
@@ -1030,7 +1040,7 @@ public:
 		DriverStation::ReportError("Breaching Ramparts");
 		//Just drive?
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,2.8);
+		CorrectedDrive(1,0,3);
 	}
 
 	void BreachDrawbridge()
@@ -1048,12 +1058,32 @@ public:
 	void BreachRockWall()
 	{
 		DriverStation::ReportError("Breaching Rock Wall");
-		//Just drive?
-		CorrectedApproach(1,0);
+
+		CorrectedApproach(1.,0);
 		drive.ArcadeDrive(1.,0);
-		while(ahrs->GetRoll()<60){}
-		ShooterToAngle(10);
-		Wait(1);
+		timer.Reset();
+
+		bool timerStarted = false;
+
+		while((!timerStarted || timer.Get()<4.8)&& ShouldBeBreaching())
+		{
+			if(!timerStarted && abs(ahrs->GetRoll())>20)
+			{
+				timerStarted=true;
+				timer.Start();
+				ShooterAngleToSpeed(-1);
+			}
+
+			if(!angleBottom.Get())
+			{
+				ShooterAngleToSpeed(0);
+			}
+
+		}
+		timer.Stop();
+
+		ShooterAngleToSpeed(0);
+
 		drive.ArcadeDrive(0.,0);
 	}
 
@@ -1065,7 +1095,7 @@ public:
 		Wait(0.1);
 		shifter.Set(shifter.kForward);
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,2);
+		CorrectedDrive(1,0,6);
 		shifter.Set(shifter.kReverse);
 	}
 
@@ -1074,7 +1104,7 @@ public:
 		DriverStation::ReportError("Breaching Low Bar");
 		//ShooterToAngle(280);//Was 180
 		CorrectedApproach(1,0);
-		CorrectedDrive(1,0,2.7);
+		CorrectedDrive(1,0,4.5);
 	}
 
 	void BreachLowBarReverse()
@@ -1085,7 +1115,7 @@ public:
 		angleMotor.Set(0);
 		while(!RotateToAngle(0)){}
 		CorrectedApproach(-1,0);
-		CorrectedDrive(-0.9,0,2.5);
+		CorrectedDrive(-0.9,0,4.5);
 
 	}
 	/*----------------------------------------------------------------------
@@ -1235,7 +1265,7 @@ public:
 				else
 				{
 					//Increase angle
-					ShooterAngleToSpeed(-0.09);
+					ShooterAngleToSpeed(-0.18);
 				}
 			}
 			else
@@ -1493,11 +1523,12 @@ public:
 		while(angleBottom.Get() && IsEnabled() && IsAutonomous()){}
 		ShooterAngleToSpeed(0);
 		angleMotor.SetEncPosition(0);
+		std::cout << "Zero complete" << std::endl;
 	}
 	void ShooterAngleToSpeed(double percent)
 	{
 		SmartDashboard::PutNumber("Percent",abs(percent*100)/100.0);
-		if(abs(percent*100)/100.0<SHOOTER_ANGLE_HOLD_PERCENT)
+		if(percent<SHOOTER_ANGLE_HOLD_PERCENT && percent>-SHOOTER_ANGLE_HOLD_PERCENT)
 		{
 			angleMotor.Set(SHOOTER_ANGLE_HOLD_PERCENT);
 		}
@@ -1560,10 +1591,10 @@ public:
 			//Kicker is moving, check if stop
 			//int enc = kicker.GetEncPosition();
 			std::cout << kicker.GetEncPosition() << std::endl;
-			if(kicker.GetEncPosition()>=KICKER_TICS_PER_REV)
+			if(kicker.GetEncPosition()<=-KICKER_TICS_PER_REV)
 			{
 				kicker.Set(0);
-				kicker.SetEncPosition(kicker.GetEncPosition()-KICKER_TICS_PER_REV);
+				kicker.SetEncPosition(kicker.GetEncPosition()+KICKER_TICS_PER_REV);
 				kickerMoving=false;
 				return true;
 			}
@@ -1575,7 +1606,7 @@ public:
 			if(activate)
 			{
 				kickerMoving=true;
-				kicker.Set(0.3);
+				kicker.Set(-0.4);
 			}
 			return false;
 		}
