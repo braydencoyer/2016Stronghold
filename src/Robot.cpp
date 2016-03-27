@@ -1259,13 +1259,13 @@ public:
 				drive.ArcadeDrive(0.0,0.0);
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
-					//Decrease angle
+					//Increase angle
 					ShooterAngleToSpeed(0.18);
 				}
 				else
 				{
-					//Increase angle
-					ShooterAngleToSpeed(-0.18);
+					//Decrease angle
+					ShooterAngleToSpeed(-0.24);
 				}
 			}
 			else
