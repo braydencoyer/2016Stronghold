@@ -73,22 +73,36 @@ public:
 	//--------------------------VISION CONSTANTS-------------------
 	int TARGET_ORIGIN_X = 373;
 	int TARGET_ORIGIN_Y = 186;
-	int ORIGIN_X_TOL = 15;
-	int ORIGIN_Y_TOL = 17;
+	int ORIGIN_X_TOL = 10;
+	int ORIGIN_Y_TOL = 15;
 
-	Range RING_HUE_RANGE = {101, 155};	//Default hue range for ring light, old=64
-	Range RING_SAT_RANGE = {225, 255};	//Default saturation range for ring light, old=88
-	Range RING_VAL_RANGE = {240, 255};	//Default value range for ring light old=230
+	//Test bot measurements: H120 S240 V212 NOT V230
+
+	Range RING_HUE_RANGE = {100, 130};	//Default hue range for ring light, old=64
+	Range RING_SAT_RANGE = {230, 255};	//Default saturation range for ring light, old=88
+	Range RING_VAL_RANGE = {230, 255};	//Default value range for ring light old=230
 	float AREA_MINIMUM = 0.05; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
 	double CAMERA_BRIGHTNESS_AUTO = 150;//TODO
-	double CAMERA_BRIGHTNESS_DRIVING = 200;
-	unsigned int CAMERA_WHITEBALANCE = 8000;
-	double CAMERA_EXPOSURE = 20;
+	double CAMERA_BRIGHTNESS_DRIVING = 150;
+	unsigned int CAMERA_WHITEBALANCE = 4000;
+	double CAMERA_EXPOSURE = 100;
+
+	//MICROSOFT LIFECAM 3000
 	//BRIGHTNESS: MAX: 255 MIN: 30
 	//WHITE BALANCE: MAX: 10000 MIN: 2800
 	//EXPOSURE: MAX: 20000 MIN: 5
+
+	/*
+	LOGITECH 920
+	 MAXEX2047
+ 	 MINEX3
+ 	 MAXBR255
+ 	 MINBR0
+ 	 MAXWB6500
+ 	 MINWB2000
+	 */
 
 	//-------------------MISC CONSTANTS-----------------------
 	double MAX_IN_SPEED = .7;
@@ -103,7 +117,7 @@ public:
 	CANTalon shooterB;
 	CANTalon angleMotor;
 	//One rotation: 9124
-	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1; //Voltage percent needed to hold shooter in place
+	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.01;//WAS 0.1 TODO //Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
 
@@ -197,7 +211,7 @@ public:
 	const static int KICKER_TICS_PER_REV = 1970;
 	bool kickerMoving;
 
-	bool KILL;
+	bool panicMode;
 
 	Timer timer;
 
@@ -244,7 +258,7 @@ public:
 		drive.SetInvertedMotor(drive.kRearRightMotor,false);
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
-		angleMotor.SetInverted(false);
+		angleMotor.SetInverted(true);//TODO set to false for comp
 	}
 
 
@@ -335,7 +349,7 @@ public:
 		SmartDashboard::PutData("DefenseSelectFour",def[2]);
 		SmartDashboard::PutData("DefenseSelectFive",def[3]);
 
-		KILL = false;
+		panicMode = false;
 
 		//------------------VISION---------------------
 		//Create space in memory for images
@@ -344,7 +358,7 @@ public:
 		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
 		//Opens the camera for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
-		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
+		imaqError = IMAQdxOpenCamera("cam2", IMAQdxCameraControlModeController, &session);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxOpenCamera error: " + std::to_string((long)imaqError) + "\n");
@@ -357,7 +371,7 @@ public:
 		}
 
 		//Open cam1
-		imaqError = IMAQdxOpenCamera("cam0", IMAQdxCameraControlModeController, &rearSession);
+		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
@@ -439,8 +453,8 @@ public:
 
 			SmartDashboard::PutNumber("Kicker Encoder",kicker.GetEncPosition());
 
-			SmartDashboard::PutBoolean("Upper limit",angleTop.Get(KILL));
-			SmartDashboard::PutBoolean("Lower Limit",angleBottom.Get(KILL));
+			SmartDashboard::PutBoolean("Upper limit",angleTop.Get(panicMode));
+			SmartDashboard::PutBoolean("Lower Limit",angleBottom.Get(panicMode));
 
 			SmartDashboard::PutBoolean("Firing",kickerMoving);
 		}
@@ -453,7 +467,7 @@ public:
 		if(specials.GetRawButton(BUT_AUTOAIMA))
 		{
 			IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
-			SmartDashboard::PutBoolean("Done",false);
+			SmartDashboard::PutBoolean("Done",AutoAim());
 			AutoAimHardLoop();
 			SmartDashboard::PutBoolean("Done",true);
 			//Return halts all execution here
@@ -472,22 +486,38 @@ public:
 		int pov = mainStick.GetPOV();
 		if(pov!=-1)
 		{
-			SmartDashboard::PutBoolean("Done",RotateToAngle(pov,1));
+			SmartDashboard::PutBoolean("Done",RotateToAngle(pov,0.6));
+			return;
+		}
+
+		if(mainStick.GetRawButton(BUT_LEFTGOAL_LINEUP))
+		{
+			SmartDashboard::PutBoolean("Done",RotateToAngle(60,0.6));
+			return;
+		}
+
+		if(mainStick.GetRawButton(BUT_RIGHTGOAL_LINEUP))
+		{
+			SmartDashboard::PutBoolean("Done",RotateToAngle(-60,0.6));
+			return;
+		}
+
+		if(mainStick.GetRawButton(BUT_FIXED_ANGLE))
+		{
+			ShooterToAngle(300);
 			return;
 		}
 
 		//---------------RESET BUTTONS------------------
-		if(mainStick.GetRawButton(BUT_NAVX_RESET))
-		{
-			ahrs->ResetDisplacement();
-			ahrs->ZeroYaw();
-		}
-		if(mainStick.GetRawButton(BUT_ENCODERS_RESET))
+		if(mainStick.GetRawButton(BUT_SENSORS_RESET))
 		{
 			angleMotor.SetEncPosition(0);
 			leftEnc.Reset();
 			rightEnc.Reset();
 			armMain.SetEncPosition(0);
+			kicker.SetEncPosition(0);
+			ahrs->ResetDisplacement();
+			ahrs->ZeroYaw();
 		}
 
 		//------------------AUTOBREACH----------------------
@@ -543,7 +573,7 @@ public:
 				IMAQdxStopAcquisition(rearSession);
 				IMAQdxUnconfigureAcquisition(rearSession);
 				IMAQdxCloseCamera(session);
-				imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &session);
+				imaqError = IMAQdxOpenCamera("cam2", IMAQdxCameraControlModeController, &session);
 				IMAQdxStartAcquisition(session);
 				IMAQdxConfigureGrab(session);
 				SetUpCamera();
@@ -628,8 +658,8 @@ public:
 
 		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY= specials.GetY();
-		if(!angleBottom.Get(KILL) && specialsY<0) specialsY=0;
-		if(!angleTop.Get(KILL) && specialsY>0) specialsY=0;
+		if(!angleBottom.Get(panicMode) && specialsY<0) specialsY=0;
+		if(!angleTop.Get(panicMode) && specialsY>0) specialsY=0;
 		ShooterAngleToSpeed(specialsY);
 
 
@@ -650,7 +680,7 @@ public:
 
 		if(mainStick.GetRawButton(BUT_PANIC_KILL))
 		{
-			KILL = true;
+			panicMode = true;
 			DriverStation::ReportError("All Switches Bypassed.");
 		}
 	}
@@ -711,7 +741,7 @@ public:
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
 
-		ZeroShooter();
+		//ZeroShooter();
 
 		//Re zero NavX in case it drifted while stationary
 		//NOTE: THIS IS NOT RECALIBRATION.
@@ -1065,7 +1095,7 @@ public:
 
 		bool timerStarted = false;
 
-		while((!timerStarted || timer.Get()<4.8)&& ShouldBeBreaching())
+		while((!timerStarted || timer.Get()<4.8)&& ShouldBeAuto())
 		{
 			if(!timerStarted && abs(ahrs->GetRoll())>20)
 			{
@@ -1156,10 +1186,10 @@ public:
 
 	void CorrectedApproach(double speed, double angle)
 	{
-		while(!RotateToAngle(angle)&&ShouldBeBreaching()){}
+		while(!RotateToAngle(angle)&&ShouldBeAuto()){}
 		timer.Reset();
 		timer.Start();
-		while(ahrs->GetRoll()>-6 &&ahrs->GetRoll()&& ShouldBeBreaching())
+		while(ahrs->GetRoll()>-6 &&ahrs->GetRoll()&& ShouldBeAuto())
 		{
 			//We have not driven far enough, drive
 
@@ -1189,7 +1219,7 @@ public:
 	{
 		timer.Reset();
 		timer.Start();
-		while(timer.Get()<numSeconds && ShouldBeBreaching())
+		while(timer.Get()<numSeconds && ShouldBeAuto())
 		{
 			//We have not driven far enough, drive
 
@@ -1234,7 +1264,7 @@ public:
 
 		if(screenPosX==-1&&screenPosY==-1)
 		{
-			drive.ArcadeDrive(0.,-0.9);
+			drive.ArcadeDrive(0.,-0.7);
 			return false;
 		}
 
@@ -1257,35 +1287,38 @@ public:
 				//L/R is within tolerance
 				//Need up/down adjustment
 				drive.ArcadeDrive(0.0,0.0);
+				//double dY = 0.6/400.0*(abs(screenPosY-TARGET_ORIGIN_Y))+0.08;
+				double dY = sin((double)abs(screenPosY-TARGET_ORIGIN_Y)*M_PI/800.0);
+				SmartDashboard::PutNumber("Delta Y",dY);
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
-					//Increase angle
-					ShooterAngleToSpeed(0.18);
+					//Increase angle 0.18
+					ShooterAngleToSpeed(dY);
 				}
 				else
 				{
-					//Decrease angle
-					ShooterAngleToSpeed(-0.24);
+					//Decrease angle -0.24
+					ShooterAngleToSpeed(-dY);
 				}
 			}
 			else
 			{
 				//Need L/R adjustment before proceeding
 				ShooterAngleToSpeed(0);
-				if(abs(screenPosX-TARGET_ORIGIN_X)<100)
+/*				if(abs(screenPosX-TARGET_ORIGIN_X)<50)
 				{
 					if(screenPosX>TARGET_ORIGIN_X)
 					{
 						//Turn right
 						drive.ArcadeDrive(0.0,0.48);
-						Wait(0.08);
+						Wait(0.04);
 						drive.ArcadeDrive(0.0,0.0);
 					}
 					else
 					{
 						//Turn left
 						drive.ArcadeDrive(0.0,-0.48);
-						Wait(0.08);
+						Wait(0.04);
 						drive.ArcadeDrive(0.0,0.0);
 					}
 				}
@@ -1301,6 +1334,29 @@ public:
 						//Turn left
 						drive.ArcadeDrive(0.0,-0.45);
 					}
+				}*/
+				/*double dX = sqrt(sin((double)abs(screenPosX-TARGET_ORIGIN_X)*M_PI/1000.0));
+				if(screenPosX>TARGET_ORIGIN_X)
+				{
+					//Turn right
+					drive.ArcadeDrive(0.0,dX);
+				}
+				else
+				{
+					//Turn left
+					drive.ArcadeDrive(0.0,-dX);
+				}*/
+
+				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.11;
+				if(screenPosX>TARGET_ORIGIN_X)
+				{
+					//Turn right
+					drive.ArcadeDrive(0.0,dX,false);
+				}
+				else
+				{
+					//Turn left
+					drive.ArcadeDrive(0.0,-dX,false);
 				}
 			}
 		}
@@ -1394,8 +1450,8 @@ public:
 		//Count particles in the image
 		int numParticles = 0;
 		//filter out small particles
-		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
-		imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
+		//criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
+		//imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
 
 		//Get array of particles
 		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
@@ -1480,7 +1536,7 @@ public:
 		//Wait(1);
 		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_EXPOSURE);
 		//Wait(1);
-		/*double value;
+		double value;
 		IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
 		std::cout << "MAXEX" << value << std::endl;
 		IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
@@ -1493,7 +1549,7 @@ public:
 		IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
 		std::cout <<"MAXWB"<< val2 << std::endl;
 		IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
-		std::cout <<"MINWB"<< val2 << std::endl;*/
+		std::cout <<"MINWB"<< val2 << std::endl;
 	}
 
 	/* -------------------------------------------------------------------
@@ -1507,12 +1563,12 @@ public:
 		if(target<angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(0.5);
-			while(target<angleMotor.GetEncPosition() && angleTop.Get(KILL) && ShouldBeBreaching()){};
+			while(target<angleMotor.GetEncPosition() && angleTop.Get(panicMode) && ShouldBeAuto()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
 			ShooterAngleToSpeed(-0.5);
-			while(target>angleMotor.GetEncPosition() && angleBottom.Get(KILL) && ShouldBeBreaching()){};
+			while(target>angleMotor.GetEncPosition() && angleBottom.Get(panicMode) && ShouldBeAuto()){};
 		}
 		ShooterAngleToSpeed(0);
 	}
@@ -1527,7 +1583,6 @@ public:
 	}
 	void ShooterAngleToSpeed(double percent)
 	{
-		SmartDashboard::PutNumber("Percent",abs(percent*100)/100.0);
 		if(percent<SHOOTER_ANGLE_HOLD_PERCENT && percent>-SHOOTER_ANGLE_HOLD_PERCENT)
 		{
 			angleMotor.Set(SHOOTER_ANGLE_HOLD_PERCENT);
@@ -1573,7 +1628,7 @@ public:
 	 * ----------------------------------------------------
 	 */
 
-	bool ShouldBeBreaching()
+	bool ShouldBeAuto()
 	{
 		//Return true if we are autonomous and enabled OR a button is pressed and we are enabled
 		return (IsAutonomous()&&IsEnabled())||
@@ -1581,7 +1636,10 @@ public:
 						||mainStick.GetRawButton(BUT_BREACH3)
 						||mainStick.GetRawButton(BUT_BREACH4)
 						||mainStick.GetRawButton(BUT_BREACH5)
-						||mainStick.GetRawButton(BUT_APPROACH));
+						||mainStick.GetRawButton(BUT_APPROACH)
+						||mainStick.GetRawButton(BUT_LEFTGOAL_LINEUP)
+						||mainStick.GetRawButton(BUT_RIGHTGOAL_LINEUP)
+						||mainStick.GetRawButton(BUT_FIXED_ANGLE));
 	}
 
 	bool UpdateKicker(bool activate)
