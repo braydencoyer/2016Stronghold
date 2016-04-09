@@ -78,9 +78,9 @@ public:
 
 	//Test bot measurements: H120 S240 V212 NOT V230
 
-	Range RING_HUE_RANGE = {100, 130};	//Default hue range for ring light, old=64
+	Range RING_HUE_RANGE = {50, 130};	//Default hue range for ring light, old=64
 	Range RING_SAT_RANGE = {230, 255};	//Default saturation range for ring light, old=88
-	Range RING_VAL_RANGE = {230, 255};	//Default value range for ring light old=230
+	Range RING_VAL_RANGE = {210, 255};	//Default value range for ring light old=230
 	float AREA_MINIMUM = 0.05; //Area minimum for particle as a percentage of total image area
 	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
 
@@ -457,6 +457,8 @@ public:
 			SmartDashboard::PutBoolean("Lower Limit",angleBottom.Get(panicMode));
 
 			SmartDashboard::PutBoolean("Firing",kickerMoving);
+
+
 		}
 
 		SmartDashboard::PutNumber("Shooter Revs",shooterA.GetEncVel());
@@ -484,6 +486,8 @@ public:
 
 		//---------------Directional--------------------
 		int pov = mainStick.GetPOV();
+		//POV switch gives 0->360, we want -180->180
+		if(pov>180) pov=pov-360;
 		if(pov!=-1)
 		{
 			SmartDashboard::PutBoolean("Done",RotateToAngle(pov,0.6));
@@ -1189,7 +1193,7 @@ public:
 		while(!RotateToAngle(angle)&&ShouldBeAuto()){}
 		timer.Reset();
 		timer.Start();
-		while(ahrs->GetRoll()>-6 &&ahrs->GetRoll()&& ShouldBeAuto())
+		while(ahrs->GetRoll()>-6 && ahrs->GetRoll()<6 && ShouldBeAuto())
 		{
 			//We have not driven far enough, drive
 
@@ -1274,8 +1278,8 @@ public:
 				&& screenPosY>TARGET_ORIGIN_Y-ORIGIN_Y_TOL
 				&& screenPosY<TARGET_ORIGIN_Y+ORIGIN_Y_TOL)
 		{
-			drive.ArcadeDrive(0.0,0.0);
 			ShooterAngleToSpeed(0);
+			drive.ArcadeDrive(0.0,0.0);
 			return true;  //true=proceed to next action
 		}
 		else
@@ -1347,7 +1351,7 @@ public:
 					drive.ArcadeDrive(0.0,-dX);
 				}*/
 
-				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.11;
+				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.13;
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
