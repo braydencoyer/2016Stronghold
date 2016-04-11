@@ -641,8 +641,15 @@ public:
 		//-------------------SHOOTER------------------
 
 		//Speed based on throttle lever, convert from -1<t<1 to 0<t<1
+		//Speed is now fixed, throttle lever used below for arm
 		double speed = 0;
-		if(specials.GetRawButton(BUT_SHOOTER_OUT)) speed=1;
+		//Locks shooter angle if firing
+		bool lockShooter = false;
+		if(specials.GetRawButton(BUT_SHOOTER_OUT))
+		{
+			speed=1;
+			lockShooter = true;
+		}
 		else if(specials.GetRawButton(BUT_SHOOTER_IN)) speed=-MAX_IN_SPEED;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
@@ -661,7 +668,13 @@ public:
 		UpdateKicker(specials.GetRawButton(BUT_FIRE));
 
 		//Change shooter angle using specials y axis, stop if at limit switch
-		double specialsY= specials.GetY();
+		double specialsY = 0;
+		if(!lockShooter)
+		{
+			//Shooter is not locked
+			specialsY= specials.GetY();
+		}
+		//Otherwise specialsY is 0 because the shooter is locked (true when firing)
 		if(!angleBottom.Get(panicMode) && specialsY<0) specialsY=0;
 		if(!angleTop.Get(panicMode) && specialsY>0) specialsY=0;
 		ShooterAngleToSpeed(specialsY);
