@@ -4,7 +4,6 @@
 #include "AHRS.h"
 #include "Channels.h"
 #include "LimitSwitch.cpp"
-//#include <chrono>
 
 class Robot: public IterativeRobot
 {
@@ -16,8 +15,6 @@ public:
 	 */
 
 	LiveWindow *lw = LiveWindow::GetInstance();
-
-	//std::chrono::time_point<std::chrono::system_clock> start,end;
 
 	//----------------------------AUTO MODE CONSTANTS-------------------
 	//Thsese strings represent possible SmartDashboard auto modes/states/etc.
@@ -76,13 +73,11 @@ public:
 	int ORIGIN_X_TOL = 10;
 	int ORIGIN_Y_TOL = 15;
 
-	//Test bot measurements: H120 S240 V212 NOT V230
+	//Test bot measurements in basement: H120 S240 V212 NOT V230
 
-	Range RING_HUE_RANGE = {50, 130};	//Default hue range for ring light, old=64
-	Range RING_SAT_RANGE = {230, 255};	//Default saturation range for ring light, old=88
-	Range RING_VAL_RANGE = {210, 255};	//Default value range for ring light old=230
-	float AREA_MINIMUM = 0.05; //Area minimum for particle as a percentage of total image area
-	double VIEW_ANGLE = 60; //View angle for camera, set to Axis m1011 by default, 64 for m1013, 51.7 for 206, 52 for HD3000 square, 60 for HD3000 640x480
+	Range RING_HUE_RANGE = {50, 130};	//Hue range for ring light, old=64
+	Range RING_SAT_RANGE = {230, 255};	//Saturation range for ring light, old=88
+	Range RING_VAL_RANGE = {210, 255};	//Value range for ring light old=230
 
 	double CAMERA_BRIGHTNESS_AUTO = 150;//TODO
 	double CAMERA_BRIGHTNESS_DRIVING = 150;
@@ -150,9 +145,8 @@ public:
 		double BoundingRectBottom;
 	};
 
-	//Images: Frame stores RGB from camera, binaryFrame stores filtered image
+	//Images: Frame stores RGB from camera, binaryFrame stores filtered image of black/white only
 	Image *frame;
-	Image *rearFrame;
 	Image *binaryFrame;
 
 	//Filter function arguments
@@ -207,12 +201,13 @@ public:
 
 	Encoder leftEnc,rightEnc;
 
-	//Kicker tech
+	//Kicker stuff
 	const static int KICKER_TICS_PER_REV = 1970;
 	bool kickerMoving;
 
 	bool panicMode;
 
+	//Timer
 	Timer timer;
 
 	/*--------------------------------------------------------------
@@ -355,7 +350,6 @@ public:
 		//Create space in memory for images
 		binaryFrame = imaqCreateImage(IMAQ_IMAGE_U8,0);
 		frame = imaqCreateImage(IMAQ_IMAGE_RGB, 0);
-		rearFrame = imaqCreateImage(IMAQ_IMAGE_RGB,0);
 
 		//Opens the camera for communication. Returns a number other than IMAQdxErrorSuccess if something goes wrong.
 		imaqError = IMAQdxOpenCamera("cam2", IMAQdxCameraControlModeController, &session);
@@ -370,22 +364,17 @@ public:
 			DriverStation::ReportError("IMAQdxConfigureGrab error: " + std::to_string((long)imaqError) + "\n");
 		}
 
-		//Open cam1
+		//Open camera
 		imaqError = IMAQdxOpenCamera("cam1", IMAQdxCameraControlModeController, &rearSession);
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("IMAQdxOpenCamera 2 error: " + std::to_string((long)imaqError) + "\n");
 		}
 		//Configure the Grab session. Returns a number other than IMAQdxErrorSuccess if something bad happens.
-		//imaqError = IMAQdxConfigureGrab(rearSession);
-		if(imaqError != IMAQdxErrorSuccess) {
-			//Warn drivers that camera is dead
-			DriverStation::ReportError("IMAQdxConfigureGrab 2 error: " + std::to_string((long)imaqError) + "\n");
-		}
 
 		//Starts the session we configured above
 		IMAQdxStartAcquisition(session);
-		//IMAQdxStartAcquisition(rearSession);
+
 		if(imaqError != IMAQdxErrorSuccess) {
 			//Warn drivers that camera is dead
 			DriverStation::ReportError("Configure session error: " + std::to_string((long)imaqError) + "\n");
@@ -395,12 +384,12 @@ public:
 		swapButtonPressed = false;
 
 		//Put spaces for these numbers on dashboard. Used to adjust vision masking.
-		SmartDashboard::PutNumber("Tote hue min", RING_HUE_RANGE.minValue);
-		SmartDashboard::PutNumber("Tote hue max", RING_HUE_RANGE.maxValue);
-		SmartDashboard::PutNumber("Tote sat min", RING_SAT_RANGE.minValue);
-		SmartDashboard::PutNumber("Tote sat max", RING_SAT_RANGE.maxValue);
-		SmartDashboard::PutNumber("Tote val min", RING_VAL_RANGE.minValue);
-		SmartDashboard::PutNumber("Tote val max", RING_VAL_RANGE.maxValue);
+		SmartDashboard::PutNumber("hue min", RING_HUE_RANGE.minValue);
+		SmartDashboard::PutNumber("hue max", RING_HUE_RANGE.maxValue);
+		SmartDashboard::PutNumber("sat min", RING_SAT_RANGE.minValue);
+		SmartDashboard::PutNumber("sat max", RING_SAT_RANGE.maxValue);
+		SmartDashboard::PutNumber("val min", RING_VAL_RANGE.minValue);
+		SmartDashboard::PutNumber("val max", RING_VAL_RANGE.maxValue);
 		SmartDashboard::PutNumber("X To Target", TARGET_ORIGIN_X);
 		SmartDashboard::PutNumber("Y To Target", TARGET_ORIGIN_Y);
 		SmartDashboard::PutNumber("X Tol", ORIGIN_X_TOL);
@@ -1007,7 +996,7 @@ public:
 		}
 		case 0:
 		{
-			if(!RotateToAngle(30)) return false;
+			if(!RotateToAngle(25)) return false;
 			break;
 		}
 		case 1:
@@ -1017,12 +1006,12 @@ public:
 		}
 		case 2:
 		{
-			if(!RotateToAngle(-10)) return false;
+			if(!RotateToAngle(-5)) return false;
 			break;
 		}
 		case 3:
 		{
-			if(!RotateToAngle(-20)) return false;
+			if(!RotateToAngle(-15)) return false;
 			break;
 		}
 		}
@@ -1149,7 +1138,7 @@ public:
 	void BreachLowBar()
 	{
 		DriverStation::ReportError("Breaching Low Bar");
-		//ShooterToAngle(280);//Was 180
+
 		CorrectedApproach(1,0);
 		CorrectedDrive(1,0,4.5);
 	}
@@ -1304,9 +1293,9 @@ public:
 				//L/R is within tolerance
 				//Need up/down adjustment
 				drive.ArcadeDrive(0.0,0.0);
-				//double dY = 0.6/400.0*(abs(screenPosY-TARGET_ORIGIN_Y))+0.08;
+
 				double dY = sin((double)abs(screenPosY-TARGET_ORIGIN_Y)*M_PI/800.0);
-				SmartDashboard::PutNumber("Delta Y",dY);
+
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
 					//Increase angle 0.18
@@ -1322,47 +1311,6 @@ public:
 			{
 				//Need L/R adjustment before proceeding
 				ShooterAngleToSpeed(0);
-/*				if(abs(screenPosX-TARGET_ORIGIN_X)<50)
-				{
-					if(screenPosX>TARGET_ORIGIN_X)
-					{
-						//Turn right
-						drive.ArcadeDrive(0.0,0.48);
-						Wait(0.04);
-						drive.ArcadeDrive(0.0,0.0);
-					}
-					else
-					{
-						//Turn left
-						drive.ArcadeDrive(0.0,-0.48);
-						Wait(0.04);
-						drive.ArcadeDrive(0.0,0.0);
-					}
-				}
-				else
-				{
-					if(screenPosX>TARGET_ORIGIN_X)
-					{
-						//Turn right
-						drive.ArcadeDrive(0.0,0.45);
-					}
-					else
-					{
-						//Turn left
-						drive.ArcadeDrive(0.0,-0.45);
-					}
-				}*/
-				/*double dX = sqrt(sin((double)abs(screenPosX-TARGET_ORIGIN_X)*M_PI/1000.0));
-				if(screenPosX>TARGET_ORIGIN_X)
-				{
-					//Turn right
-					drive.ArcadeDrive(0.0,dX);
-				}
-				else
-				{
-					//Turn left
-					drive.ArcadeDrive(0.0,-dX);
-				}*/
 
 				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.13;
 				if(screenPosX>TARGET_ORIGIN_X)
@@ -1383,12 +1331,12 @@ public:
 
 	void CalibrateVision()//For tuning vision constants only
 	{
-		RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("Tote hue min", RING_HUE_RANGE.minValue);
-		RING_HUE_RANGE.maxValue = SmartDashboard::GetNumber("Tote hue max", RING_HUE_RANGE.maxValue);
-		RING_SAT_RANGE.minValue = SmartDashboard::GetNumber("Tote sat min", RING_SAT_RANGE.minValue);
-		RING_SAT_RANGE.maxValue = SmartDashboard::GetNumber("Tote sat max", RING_SAT_RANGE.maxValue);
-		RING_VAL_RANGE.minValue = SmartDashboard::GetNumber("Tote val min", RING_VAL_RANGE.minValue);
-		RING_VAL_RANGE.maxValue = SmartDashboard::GetNumber("Tote val max", RING_VAL_RANGE.maxValue);
+		RING_HUE_RANGE.minValue = SmartDashboard::GetNumber("hue min", RING_HUE_RANGE.minValue);
+		RING_HUE_RANGE.maxValue = SmartDashboard::GetNumber("hue max", RING_HUE_RANGE.maxValue);
+		RING_SAT_RANGE.minValue = SmartDashboard::GetNumber("sat min", RING_SAT_RANGE.minValue);
+		RING_SAT_RANGE.maxValue = SmartDashboard::GetNumber("sat max", RING_SAT_RANGE.maxValue);
+		RING_VAL_RANGE.minValue = SmartDashboard::GetNumber("val min", RING_VAL_RANGE.minValue);
+		RING_VAL_RANGE.maxValue = SmartDashboard::GetNumber("val max", RING_VAL_RANGE.maxValue);
 
 		TARGET_ORIGIN_X = SmartDashboard::GetNumber("X To Target",TARGET_ORIGIN_X);
 		TARGET_ORIGIN_Y = SmartDashboard::GetNumber("Y To Target",TARGET_ORIGIN_Y);
@@ -1408,14 +1356,6 @@ public:
 
 		//Send masked image to dashboard
 		SendToDashboard(binaryFrame, imaqError);
-
-		//filter out small particles
-		criteria[0] = {IMAQ_MT_AREA_BY_IMAGE_AREA, AREA_MINIMUM, 100, false, false};
-		imaqError = imaqParticleFilter4(binaryFrame, binaryFrame, criteria, 1, &filterOptions, NULL, NULL);
-
-		//Send particle count after filtering for size to dashboard
-		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
-		SmartDashboard::PutNumber("Filtered particles", numParticles);
 
 		//Make sure we even have particles to look at (crash prevention)
 		if(numParticles > 0) {
@@ -1540,20 +1480,20 @@ public:
 			CAMERA_EXPOSURE=SmartDashboard::GetNumber("ExposureTarget",-99);
 			//std::cout << CAMERA_BRIGHTNESS_AUTO << " " << CAMERA_WHITEBALANCE << " " << CAMERA_EXPOSURE << std::endl;
 		}
-		//Wait(9);
+
 		IMAQdxSetAttribute(session,ATTR_BR_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		//Wait(1);
+
 		IMAQdxSetAttribute(session,ATTR_BR_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_BRIGHTNESS_AUTO);
-		//Wait(1);
+
 		IMAQdxSetAttribute(session,ATTR_WB_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		//Wait(1);
+
 		IMAQdxSetAttribute(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,CAMERA_WHITEBALANCE);
-		//Wait(1);
+
 		IMAQdxSetAttribute(session,ATTR_EX_MODE,IMAQdxValueType::IMAQdxValueTypeString,"Manual");
-		//Wait(1);
+
 		IMAQdxSetAttribute(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,CAMERA_EXPOSURE);
-		//Wait(1);
-		double value;
+
+		/*double value;
 		IMAQdxGetAttributeMaximum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
 		std::cout << "MAXEX" << value << std::endl;
 		IMAQdxGetAttributeMinimum(session,ATTR_EX_VALUE,IMAQdxValueType::IMAQdxValueTypeF64,(void*)&value);
@@ -1566,7 +1506,7 @@ public:
 		IMAQdxGetAttributeMaximum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
 		std::cout <<"MAXWB"<< val2 << std::endl;
 		IMAQdxGetAttributeMinimum(session,ATTR_WB_VALUE,IMAQdxValueType::IMAQdxValueTypeU32,(void*)&val2);
-		std::cout <<"MINWB"<< val2 << std::endl;
+		std::cout <<"MINWB"<< val2 << std::endl;*/
 	}
 
 	/* -------------------------------------------------------------------
