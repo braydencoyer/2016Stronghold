@@ -44,10 +44,9 @@ const static int CH_SHIFTER_PCM = CH_PCMA;
 const static int CH_SHIFTER_FW = 0;
 const static int CH_SHIFTER_RV = 1;
 
-const static int CH_SHOOTSTICK_PCM = CH_PCMA;
-const static int CH_SHOOTSTICK_FW = 6;
-const static int CH_SHOOTSTICK_RV = 7;
-
+const static int CH_WHEELIE_PCM = CH_PCMA;
+const static int CH_WHEELIE_FW = 2;
+const static int CH_WHEELIE_RV = 3;
 
 /* ----------------------------------------------------------------
  *                          Buttons
@@ -62,13 +61,13 @@ const static int BUT_BREACH3 = 8;
 const static int BUT_BREACH4 = 9;
 const static int BUT_BREACH5 = 10;
 
-const static int BUT_APPROACH = 11;
+const static int BUT_WHEELIE = 2;
 
 const static int BUT_LEFTGOAL_LINEUP = 5;
 const static int BUT_RIGHTGOAL_LINEUP = 6;
 const static int BUT_FIXED_ANGLE = 3;
 
-const static int BUT_SWAPCAMS = 2;
+const static int BUT_SWAPCAMS = 11;
 
 const static int BUT_SENSORS_RESET = 4;
 

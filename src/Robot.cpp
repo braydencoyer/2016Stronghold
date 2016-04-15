@@ -68,21 +68,21 @@ public:
 	double ANGLE_TOLERANCE = 2;   //Degrees, how far can we be + or -
 
 	//--------------------------VISION CONSTANTS-------------------
-	int TARGET_ORIGIN_X = 373;
-	int TARGET_ORIGIN_Y = 186;
+	int TARGET_ORIGIN_X = 318;
+	int TARGET_ORIGIN_Y = 248;
 	int ORIGIN_X_TOL = 10;
 	int ORIGIN_Y_TOL = 15;
 
 	//Test bot measurements in basement: H120 S240 V212 NOT V230
 
-	Range RING_HUE_RANGE = {50, 130};	//Hue range for ring light, old=64
+	Range RING_HUE_RANGE = {115, 128};//50 130	//Hue range for ring light, old=64
 	Range RING_SAT_RANGE = {230, 255};	//Saturation range for ring light, old=88
-	Range RING_VAL_RANGE = {210, 255};	//Value range for ring light old=230
+	Range RING_VAL_RANGE = {227, 255};	//Value range for ring light old=230
 
-	double CAMERA_BRIGHTNESS_AUTO = 150;//TODO
-	double CAMERA_BRIGHTNESS_DRIVING = 150;
-	unsigned int CAMERA_WHITEBALANCE = 4000;
-	double CAMERA_EXPOSURE = 100;
+	double CAMERA_BRIGHTNESS_AUTO = 150;
+	double CAMERA_BRIGHTNESS_DRIVING = 150;//150
+	unsigned int CAMERA_WHITEBALANCE = 4000;//4000
+	double CAMERA_EXPOSURE = 100;//100
 
 	//MICROSOFT LIFECAM 3000
 	//BRIGHTNESS: MAX: 255 MIN: 30
@@ -112,7 +112,7 @@ public:
 	CANTalon shooterB;
 	CANTalon angleMotor;
 	//One rotation: 9124
-	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.01;//WAS 0.1 TODO //Voltage percent needed to hold shooter in place
+	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1;//Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
 
@@ -180,6 +180,9 @@ public:
 
 	ParticleReport best;
 
+	int visionConfidence;
+	const int MIN_VISION_CONFIDENCE = 5;
+
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
 
@@ -189,6 +192,8 @@ public:
 	DoubleSolenoid shifter;
 
 	Compressor compressor;
+
+	//DoubleSolenoid wheelie;
 
 	//--------------------------LIMIT SWITCHES--------------------------
 	LimitSwitch angleBottom;
@@ -202,8 +207,9 @@ public:
 	Encoder leftEnc,rightEnc;
 
 	//Kicker stuff
-	const static int KICKER_TICS_PER_REV = 1970;
+	const static int KICKER_TICS_PER_REV = 748;
 	bool kickerMoving;
+	bool walkBack;
 
 	bool panicMode;
 
@@ -229,6 +235,7 @@ public:
 		pdp(CH_PDP),
 		shifter(CH_SHIFTER_PCM,CH_SHIFTER_FW,CH_SHIFTER_RV),
 		compressor(CH_PCMA),
+		//wheelie(CH_WHEELIE_PCM,CH_WHEELIE_FW,CH_WHEELIE_RV),
 		angleBottom(CH_SHOOTER_ANGLE_BOTTOM,true),
 		angleTop(CH_SHOOTER_ANGLE_TOP,true),
 		hasBall(CH_HASBALL,false),
@@ -253,7 +260,7 @@ public:
 		drive.SetInvertedMotor(drive.kRearRightMotor,false);
 
 		angleMotor.SetFeedbackDevice(angleMotor.QuadEncoder);
-		angleMotor.SetInverted(true);//TODO set to false for comp
+		angleMotor.SetInverted(false);
 	}
 
 
@@ -410,6 +417,7 @@ public:
 		kicker.SetEncPosition(0);
 
 		kickerMoving = false;
+		walkBack = false;
 	}
 	/* ------------------------------------------------------------------------
 	 * 									Teleop
@@ -514,12 +522,6 @@ public:
 		}
 
 		//------------------AUTOBREACH----------------------
-		//If button pressed, approach
-		if(mainStick.GetRawButton(BUT_APPROACH))
-		{
-			CorrectedApproach(1,0);
-			return;
-		}
 		//If button pressed, breach defType at selected position
 		if(mainStick.GetRawButton(BUT_BREACH2))
 		{
@@ -606,6 +608,11 @@ public:
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X,TARGET_ORIGIN_Y-70},{TARGET_ORIGIN_X,TARGET_ORIGIN_Y+70},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-70,TARGET_ORIGIN_Y},{TARGET_ORIGIN_X+70,TARGET_ORIGIN_Y},0.0f);
 
+				//PixelValue* px;
+
+				//imaqGetPixel(frame,{200,200},px);
+
+				//px->grayscale;
 				//Set image on camera server to frame
 				CameraServer::GetInstance()->SetImage(frame);
 			}
@@ -626,6 +633,16 @@ public:
 		{
 			shifter.Set(shifter.kReverse);
 		}
+
+		//Wheelie
+		/*if(mainStick.GetRawButton(BUT_WHEELIE))
+		{
+			wheelie.Set(wheelie.kForward);
+		}
+		else
+		{
+			wheelie.Set(wheelie.kReverse);
+		}*/
 
 		//-------------------SHOOTER------------------
 
@@ -654,7 +671,7 @@ public:
 		shooterB.Set(speed);
 
 		//Change status of solenoid to push ball into wheels
-		UpdateKicker(specials.GetRawButton(BUT_FIRE));
+		UpdateKicker(shooterA.GetEncPosition()<-800 || specials.GetRawButton(BUT_FIRE));
 
 		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY = 0;
@@ -747,7 +764,7 @@ public:
 			defense[j] = *((std::string*)def[j]->GetSelected());
 		}
 
-		//ZeroShooter();
+		ZeroShooter();
 
 		//Re zero NavX in case it drifted while stationary
 		//NOTE: THIS IS NOT RECALIBRATION.
@@ -804,7 +821,7 @@ public:
 			case 4:
 			{
 				//Confirm & adjust using vision
-				if(!AutoAim()) break;
+				if(!AutoAimHardLoop()) break;
 				autoState++;
 				break;
 			}
@@ -875,8 +892,9 @@ public:
 			switch(autoState)
 			{
 			case 0: {
-				if(!AutoAim()) break;
+				if(!AutoAimHardLoop()) break;
 				autoState++;
+				DriverStation::ReportError("Target locked.");
 				break;
 			}
 			case 1: {
@@ -1101,7 +1119,7 @@ public:
 
 		bool timerStarted = false;
 
-		while((!timerStarted || timer.Get()<4.8)&& ShouldBeAuto())
+		while((!timerStarted || timer.Get()<3.5)&& ShouldBeAuto())
 		{
 			if(!timerStarted && abs(ahrs->GetRoll())>20)
 			{
@@ -1259,8 +1277,22 @@ public:
 
 	bool AutoAimHardLoop()
 	{
-		while(!AutoAim() && (specials.GetRawButton(BUT_AUTOAIMA) || IsAutonomous())){};
-		return true;
+		bool lastValid = false;
+		visionConfidence=0;
+		while(visionConfidence<MIN_VISION_CONFIDENCE && (specials.GetRawButton(BUT_AUTOAIMA) || IsAutonomous()))
+		{
+			//Keeps running AutoAim until we have been right MIN_VISION_CONFIDENCE times in a row
+			lastValid=AutoAim();
+			if(lastValid)
+			{
+				visionConfidence++;
+			}
+			else
+			{
+				visionConfidence=0;
+			}
+		}
+		return lastValid;
 	}
 
 	bool AutoAim()
@@ -1312,7 +1344,7 @@ public:
 				//Need L/R adjustment before proceeding
 				ShooterAngleToSpeed(0);
 
-				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.13;
+				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.04;
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
@@ -1593,7 +1625,6 @@ public:
 						||mainStick.GetRawButton(BUT_BREACH3)
 						||mainStick.GetRawButton(BUT_BREACH4)
 						||mainStick.GetRawButton(BUT_BREACH5)
-						||mainStick.GetRawButton(BUT_APPROACH)
 						||mainStick.GetRawButton(BUT_LEFTGOAL_LINEUP)
 						||mainStick.GetRawButton(BUT_RIGHTGOAL_LINEUP)
 						||mainStick.GetRawButton(BUT_FIXED_ANGLE));
@@ -1605,14 +1636,28 @@ public:
 		{
 			//Kicker is moving, check if stop
 			//int enc = kicker.GetEncPosition();
-			std::cout << kicker.GetEncPosition() << std::endl;
-			if(kicker.GetEncPosition()<=-KICKER_TICS_PER_REV)
+			//std::cout << kicker.GetEncPosition() << std::endl;
+			if(kicker.GetEncPosition()<=-KICKER_TICS_PER_REV/2 && !walkBack)
+			{
+				kicker.Set(-0.1);
+			}
+			if(kicker.GetEncPosition()<=-KICKER_TICS_PER_REV && !walkBack)
+			{
+				kicker.Set(0.1);
+				kicker.SetEncPosition(kicker.GetEncPosition()+KICKER_TICS_PER_REV);
+				//kickerMoving=false;
+				//return true;
+				walkBack=true;
+				return false;
+			}
+			else if(kicker.GetEncPosition()>0 && walkBack)
 			{
 				kicker.Set(0);
-				kicker.SetEncPosition(kicker.GetEncPosition()+KICKER_TICS_PER_REV);
+				walkBack=false;
 				kickerMoving=false;
 				return true;
 			}
+
 			return false;
 		}
 		else
@@ -1621,7 +1666,8 @@ public:
 			if(activate)
 			{
 				kickerMoving=true;
-				kicker.Set(-0.4);
+				walkBack = false;
+				kicker.Set(-0.8);
 			}
 			return false;
 		}
