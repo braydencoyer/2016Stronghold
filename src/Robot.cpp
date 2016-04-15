@@ -608,11 +608,6 @@ public:
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X,TARGET_ORIGIN_Y-70},{TARGET_ORIGIN_X,TARGET_ORIGIN_Y+70},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-70,TARGET_ORIGIN_Y},{TARGET_ORIGIN_X+70,TARGET_ORIGIN_Y},0.0f);
 
-				//PixelValue* px;
-
-				//imaqGetPixel(frame,{200,200},px);
-
-				//px->grayscale;
 				//Set image on camera server to frame
 				CameraServer::GetInstance()->SetImage(frame);
 			}
@@ -671,7 +666,7 @@ public:
 		shooterB.Set(speed);
 
 		//Change status of solenoid to push ball into wheels
-		UpdateKicker(shooterA.GetEncPosition()<-800 || specials.GetRawButton(BUT_FIRE));
+		UpdateKicker(shooterA.GetEncVel()<-750 || specials.GetRawButton(BUT_FIRE));
 
 		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY = 0;
@@ -1326,7 +1321,7 @@ public:
 				//Need up/down adjustment
 				drive.ArcadeDrive(0.0,0.0);
 
-				double dY = sin((double)abs(screenPosY-TARGET_ORIGIN_Y)*M_PI/800.0);
+				double dY = sin((double)abs(screenPosY-TARGET_ORIGIN_Y)*M_PI/600.0);
 
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
@@ -1344,7 +1339,7 @@ public:
 				//Need L/R adjustment before proceeding
 				ShooterAngleToSpeed(0);
 
-				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.04;
+				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.08;
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
@@ -1423,6 +1418,8 @@ public:
 			SmartDashboard::PutNumber("Target X", screenPosX);
 			SmartDashboard::PutNumber("Target Y", screenPosY);
 
+			SmartDashboard::PutBoolean("Concave",ConcavityCheck(0));
+
 
 		} else {
 			//Somehow, there were no particles on the screen. This exists to stop a crash (vecotor index out of bounds)
@@ -1453,7 +1450,7 @@ public:
 			{
 				double newParticleArea;
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &newParticleArea);
-				if(newParticleArea>bestArea)
+				if(newParticleArea>bestArea && ConcavityCheck(particleIndex))
 				{
 					//Store index and area
 					bestArea=newParticleArea;
@@ -1485,6 +1482,53 @@ public:
 		}
 	}
 
+	bool ConcavityCheck(int i)
+	{
+		double left = 0;
+		double right = 0;
+		double top = 0;
+		double bot = 0;
+
+		//std::cout << "zzzz" << std::endl;
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(top));
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(left));
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(bot));
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(right));
+
+		if(right-left<6) return false;
+
+		int x1 = (right-left)/3+left;
+		int x2 = (right-left)/3*2+left;
+
+		double yDist = (bot-top)/2;
+		//std::cout << "Loop start: " << top << " " << bot << " " << left << " " << right << std::endl;
+		for(int y=top;y<top+yDist;y++)
+		{
+			PixelValue px;
+			//std::cout << "Loop try" << x1 << " " << y <<std::endl;
+			imaqGetPixel(binaryFrame,imaqMakePoint(x1,y),&(px));
+			std::cout << px.grayscale << std::endl;
+			//std::cout << "Loop good" << std::endl;
+			//std::cout << px.grayscale << std::endl;
+			if(px.grayscale!=0) return false;
+			//std::cout << "Loop run" << std::endl;
+		}
+
+
+		for(int y=top;y<top+yDist;y++)
+		{
+			PixelValue px;
+			imaqGetPixel(binaryFrame,imaqMakePoint(x2,y),&(px));
+			if(px.grayscale!=0) return false;
+			//std::cout << "Loop 2 run" << std::endl;
+		}
+
+		return true;
+	}
 
 	//Send the filtered image to the dashboard if there isn't an error
 	void SendToDashboard(Image *image, int error)
