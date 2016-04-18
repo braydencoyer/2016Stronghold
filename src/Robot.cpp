@@ -1,5 +1,3 @@
-//Sorry Don, I'll never remember to change a date up here. Just look at the date on the file.
-
 #include "WPILib.h"
 #include "AHRS.h"
 #include "Channels.h"
@@ -69,7 +67,7 @@ public:
 
 	//--------------------------VISION CONSTANTS-------------------
 	int TARGET_ORIGIN_X = 318;
-	int TARGET_ORIGIN_Y = 248;
+	int TARGET_ORIGIN_Y = 260;
 	int ORIGIN_X_TOL = 10;
 	int ORIGIN_Y_TOL = 15;
 
@@ -102,7 +100,7 @@ public:
 	//-------------------MISC CONSTANTS-----------------------
 	double MAX_IN_SPEED = .7;
 
-	double LOWSHOT_SPEED = 0.8;
+	double LOWSHOT_SPEED = 0.4;
 
 	//-----------------------MOTORS-------------------------
 	Victor left, right;
@@ -112,7 +110,7 @@ public:
 	CANTalon shooterB;
 	CANTalon angleMotor;
 	//One rotation: 9124
-	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.1;//Voltage percent needed to hold shooter in place
+	const double SHOOTER_ANGLE_HOLD_PERCENT = 0.05;//Voltage percent needed to hold shooter in place
 
 	CANTalon armMain;
 
@@ -172,7 +170,7 @@ public:
 	double screenPosX;
 	double screenPosY;
 
-	const int CYCLES_PER_FRAME = 5;
+	const int CYCLES_PER_FRAME = 3;
 
 	//Info for switching the active camera
 	bool rearCamActive;
@@ -182,6 +180,9 @@ public:
 
 	int visionConfidence;
 	const int MIN_VISION_CONFIDENCE = 5;
+
+
+
 
 	//--------------------------PDP----------------------------------
 	PowerDistributionPanel pdp;
@@ -433,7 +434,7 @@ public:
 	//Called repeatedly while Teleop is active
 	void TeleopPeriodic()
 	{
-		if(!DriverStation::GetInstance().IsFMSAttached() && cycle==3)
+		if(!DriverStation::GetInstance().IsFMSAttached() && cycle==2)
 		{
 			SmartDashboard::PutNumber("Pitch",ahrs->GetPitch());
 			SmartDashboard::PutNumber("Yaw",ahrs->GetYaw());
@@ -608,11 +609,6 @@ public:
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X,TARGET_ORIGIN_Y-70},{TARGET_ORIGIN_X,TARGET_ORIGIN_Y+70},0.0f);
 				imaqDrawLineOnImage(frame,frame,DrawMode::IMAQ_DRAW_INVERT,{TARGET_ORIGIN_X-70,TARGET_ORIGIN_Y},{TARGET_ORIGIN_X+70,TARGET_ORIGIN_Y},0.0f);
 
-				//PixelValue* px;
-
-				//imaqGetPixel(frame,{200,200},px);
-
-				//px->grayscale;
 				//Set image on camera server to frame
 				CameraServer::GetInstance()->SetImage(frame);
 			}
@@ -656,12 +652,12 @@ public:
 			speed=1;
 			lockShooter = true;
 		}
-		else if(specials.GetRawButton(BUT_SHOOTER_IN)) speed=-MAX_IN_SPEED;
+		else if(specials.GetRawButton(BUT_SHOOTER_IN)) speed=-1;
 		double mult = -specials.GetRawAxis(2);
 		mult+=1;
 		mult*=0.5;
 		//speed*=mult;
-		if(specials.GetRawButton(BUT_LOWSHOT_A)||specials.GetRawButton(BUT_LOWSHOT_B))
+		if(!(specials.GetRawButton(BUT_LOWSHOT_A)||specials.GetRawButton(BUT_LOWSHOT_B)) && speed>0)
 		{
 			speed*=LOWSHOT_SPEED;
 		}
@@ -671,7 +667,7 @@ public:
 		shooterB.Set(speed);
 
 		//Change status of solenoid to push ball into wheels
-		UpdateKicker(shooterA.GetEncPosition()<-800 || specials.GetRawButton(BUT_FIRE));
+		UpdateKicker(shooterA.GetEncVel()<-800 || specials.GetRawButton(BUT_FIRE));
 
 		//Change shooter angle using specials y axis, stop if at limit switch
 		double specialsY = 0;
@@ -1049,7 +1045,7 @@ public:
 		shooterB.Set(1);
 		ShooterAngleToSpeed(0);
 		//Let motors spin up
-		Wait(1.5);
+		while(shooterA.GetEncVel()>-800 && ShouldBeAuto()){}
 
 		//Fire
 		UpdateKicker(true);
@@ -1172,6 +1168,9 @@ public:
 		CorrectedDrive(-0.9,0,4.5);
 
 	}
+
+
+
 	/*----------------------------------------------------------------------
 	 * 							NavX-MXP Navigation
 	 * ---------------------------------------------------------------------
@@ -1326,7 +1325,11 @@ public:
 				//Need up/down adjustment
 				drive.ArcadeDrive(0.0,0.0);
 
-				double dY = sin((double)abs(screenPosY-TARGET_ORIGIN_Y)*M_PI/800.0);
+				double dY = sin((double)abs(screenPosY-TARGET_ORIGIN_Y)*M_PI/1000.0);
+
+				if(dY<0.12) dY = 0.12;
+
+				//std::cout << dY << std::endl;
 
 				if(screenPosY<TARGET_ORIGIN_Y)
 				{
@@ -1344,7 +1347,7 @@ public:
 				//Need L/R adjustment before proceeding
 				ShooterAngleToSpeed(0);
 
-				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.04;
+				double dX = 0.6/500.0*(abs(screenPosX-TARGET_ORIGIN_X))+0.11;
 				if(screenPosX>TARGET_ORIGIN_X)
 				{
 					//Turn right
@@ -1423,6 +1426,8 @@ public:
 			SmartDashboard::PutNumber("Target X", screenPosX);
 			SmartDashboard::PutNumber("Target Y", screenPosY);
 
+			SmartDashboard::PutBoolean("Concave",ConcavityCheck(0));
+
 
 		} else {
 			//Somehow, there were no particles on the screen. This exists to stop a crash (vecotor index out of bounds)
@@ -1446,6 +1451,8 @@ public:
 		imaqError = imaqCountParticles(binaryFrame, 1, &numParticles);
 
 		//Make sure we even have particles to look at (crash prevention)
+		screenPosX = -1;
+		screenPosY = -1;
 		if(numParticles > 0) {
 			int bestIndex = -1;
 			double bestArea=0;
@@ -1453,7 +1460,7 @@ public:
 			{
 				double newParticleArea;
 				imaqMeasureParticle(binaryFrame, particleIndex, 0, IMAQ_MT_AREA_BY_IMAGE_AREA, &newParticleArea);
-				if(newParticleArea>bestArea)
+				if(newParticleArea>bestArea && ConcavityCheck(particleIndex))
 				{
 					//Store index and area
 					bestArea=newParticleArea;
@@ -1485,6 +1492,47 @@ public:
 		}
 	}
 
+	bool ConcavityCheck(int i)
+	{
+		double left = 0;
+		double right = 0;
+		double top = 0;
+		double bot = 0;
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_TOP, &(top));
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_LEFT, &(left));
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_BOTTOM, &(bot));
+
+		imaqMeasureParticle(binaryFrame, i, 0, IMAQ_MT_BOUNDING_RECT_RIGHT, &(right));
+
+		//std::cout << left << " " << right << " " << top << " " << bot << std::endl;
+
+		//if(right-left<4 || bot-top<4) return false;
+
+		int x1 = (right-left)/2+left;
+		//int x2 = (right-left)/3*2+left;
+
+		double yDist = (bot-top)/2;
+		PixelValue px;
+		for(int y=top;y<top+yDist;y++)
+		{
+			imaqGetPixel(binaryFrame,imaqMakePoint(x1,y),&(px));
+			//std::cout << px.grayscale << " " << y << std::endl;
+			if(px.grayscale!=0.0f) return false;
+		}
+
+
+		/*for(int y=top;y<top+yDist;y++)
+		{
+			PixelValue px;
+			imaqGetPixel(binaryFrame,imaqMakePoint(x2,y),&(px));
+			if(px.grayscale!=0.0f) return false;
+		}*/
+
+		return true;
+	}
 
 	//Send the filtered image to the dashboard if there isn't an error
 	void SendToDashboard(Image *image, int error)
@@ -1546,17 +1594,17 @@ public:
 	 * -------------------------------------------------------------------
 	 */
 
- 	void ShooterToAngle(int target)
+	void ShooterToAngle(int target, int speed = 1)
 	{
 		target=-target;
 		if(target<angleMotor.GetEncPosition())
 		{
-			ShooterAngleToSpeed(0.5);
+			ShooterAngleToSpeed(speed);
 			while(target<angleMotor.GetEncPosition() && angleTop.Get(panicMode) && ShouldBeAuto()){};
 		}
 		else if(target>angleMotor.GetEncPosition())
 		{
-			ShooterAngleToSpeed(-0.5);
+			ShooterAngleToSpeed(speed);
 			while(target>angleMotor.GetEncPosition() && angleBottom.Get(panicMode) && ShouldBeAuto()){};
 		}
 		ShooterAngleToSpeed(0);
@@ -1564,7 +1612,7 @@ public:
 
 	void ZeroShooter()
 	{
-		ShooterAngleToSpeed(-0.5);
+		ShooterAngleToSpeed(-1);
 		while(angleBottom.Get() && IsEnabled() && IsAutonomous()){}
 		ShooterAngleToSpeed(0);
 		angleMotor.SetEncPosition(0);
@@ -1578,7 +1626,7 @@ public:
 		}
 		else
 		{
-			//This block smoothes shooter movement outside the holding range, graph as piecewise function to understand
+			//This block smoothes shooter movement outside the holding range, graph as piecewise function to visualize
 			if(percent>0)
 			{
 				angleMotor.Set((1-SHOOTER_ANGLE_HOLD_PERCENT)/(1-SHOOTER_ANGLE_HOLD_PERCENT)*percent
